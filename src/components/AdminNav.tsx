@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-import { signOut } from "@/auth";
+import SignOutButton from "@/components/SignOutButton";
 
 interface AdminNavProps {
   adminEmail: string;
@@ -42,20 +42,7 @@ export default function AdminNav({ adminEmail, active }: AdminNavProps) {
         <div className="flex items-center gap-3 text-sm">
           <span className="text-neutral-500">{adminEmail}</span>
 
-          <form
-            action={async () => {
-              "use server";
-
-              await signOut({ redirectTo: "/signin" });
-            }}
-          >
-            <button
-              type="submit"
-              className="rounded-lg border border-neutral-300 px-3 py-1.5 text-xs font-semibold transition hover:bg-neutral-900 hover:text-white"
-            >
-              Sign out
-            </button>
-          </form>
+          <SignOutButton />
         </div>
       </div>
     </header>
