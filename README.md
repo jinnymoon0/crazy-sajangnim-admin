@@ -1,36 +1,43 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Crazy Sajangnim Admin
 
-## Getting Started
+Admin dashboard for the Crazy Sajangnim site. Google sign-in, restricted
+to emails on the shared `admin_emails` allowlist.
 
-First, run the development server:
+## What it does
+
+- **Users** — every site account (username, created, last login).
+  Passwords are stored as one-way scrypt hashes and cannot be viewed;
+  admins can issue a one-time temporary password or delete an account.
+- **Admins** — add or remove the Gmail addresses allowed to sign in
+  here. Removal takes effect on the person's next request.
+
+## Setup
+
+1. **Database** — run `supabase/auth.sql` from the main
+   `crazy_sajangnim` repository in the Supabase SQL editor (creates
+   `site_users`, `site_sessions`, `admin_emails`, and seeds the first
+   admin email).
+2. **Google OAuth** — in [Google Cloud Console](https://console.cloud.google.com/apis/credentials)
+   create an OAuth client ID (type *Web application*) and add the
+   redirect URI `http://localhost:3001/api/auth/callback/google`
+   (plus `https://YOUR-DOMAIN/api/auth/callback/google` after deploy).
+   Put the client ID/secret into `.env.local` as `AUTH_GOOGLE_ID` /
+   `AUTH_GOOGLE_SECRET`.
+3. **Env** — `.env.local` needs `SUPABASE_URL`,
+   `SUPABASE_SERVICE_ROLE_KEY` (same project as the main site),
+   `AUTH_SECRET` (any random string), and the two Google values.
+
+## Run
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Runs on http://localhost:3001 (the main site uses 3000).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Deploy
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Deploy as its own Vercel project. Set the same four env vars, and add
+the production callback URL to the Google OAuth client. Also set
+`AUTH_TRUST_HOST=true` if deploying behind a proxy other than Vercel.

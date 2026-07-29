@@ -1,64 +1,128 @@
-import Image from "next/image";
+import AdminNav from "@/components/AdminNav";
+import UserActions from "@/components/UserActions";
+import { requireAdmin } from "@/lib/require-admin";
+import { getSupabaseAdmin } from "@/lib/supabase";
 
-export default function Home() {
+export const dynamic = "force-dynamic";
+
+interface SiteUserRow {
+  id: string;
+  username: string;
+  created_at: string;
+  last_login_at: string | null;
+}
+
+function formatDate(value: string | null): string {
+  if (!value) {
+    return "—";
+  }
+
+  return new Intl.DateTimeFormat("en-US", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(new Date(value));
+}
+
+async function getUsers(): Promise<{
+  users: SiteUserRow[];
+  tablesReady: boolean;
+}> {
+  const supabase = getSupabaseAdmin();
+
+  const { data, error } = await supabase
+    .from("site_users")
+    .select("id, username, created_at, last_login_at")
+    .order("created_at", { ascending: false })
+    .limit(1000);
+
+  if (error) {
+    if (error.code !== "42P01" && error.code !== "PGRST205") {
+      console.error("User list failed:", {
+        code: error.code,
+        message: error.message,
+      });
+    }
+
+    return { users: [], tablesReady: false };
+  }
+
+  return { users: (data ?? []) as SiteUserRow[], tablesReady: true };
+}
+
+export default async function UsersPage() {
+  const admin = await requireAdmin();
+  const { users, tablesReady } = await getUsers();
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
+    <div className="min-h-screen bg-neutral-50 text-neutral-900">
+      <AdminNav adminEmail={admin.email} active="users" />
+
+      <main className="mx-auto max-w-5xl px-6 py-10">
+        <h1 className="text-2xl font-bold">Site users</h1>
+
+        <p className="mt-2 text-sm text-neutral-500">
+          {users.length} {users.length === 1 ? "account" : "accounts"}.
+          Passwords are stored as one-way hashes — they cannot be viewed,
+          only reset.
+        </p>
+
+        {!tablesReady ? (
+          <div className="mt-8 rounded-xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-800">
+            The account tables have not been created yet. Run
+            supabase/auth.sql from the main repository in the Supabase SQL
+            editor.
+          </div>
+        ) : null}
+
+        {users.length > 0 ? (
+          <div className="mt-8 overflow-x-auto rounded-2xl border border-neutral-200 bg-white">
+            <table className="w-full text-left text-sm">
+              <thead className="border-b border-neutral-200 text-xs uppercase tracking-wide text-neutral-500">
+                <tr>
+                  <th className="px-5 py-3">Username</th>
+                  <th className="px-5 py-3">Created</th>
+                  <th className="px-5 py-3">Last login</th>
+                  <th className="px-5 py-3">Actions</th>
+                </tr>
+              </thead>
+
+              <tbody>
+                {users.map((user) => (
+                  <tr
+                    key={user.id}
+                    className="border-b border-neutral-100 align-top last:border-b-0"
+                  >
+                    <td className="px-5 py-4 font-semibold">
+                      {user.username}
+                    </td>
+
+                    <td className="px-5 py-4 text-neutral-600">
+                      {formatDate(user.created_at)}
+                    </td>
+
+                    <td className="px-5 py-4 text-neutral-600">
+                      {formatDate(user.last_login_at)}
+                    </td>
+
+                    <td className="px-5 py-4">
+                      <UserActions
+                        userId={user.id}
+                        username={user.username}
+                      />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : tablesReady ? (
+          <p className="mt-8 text-sm text-neutral-500">
+            No accounts yet.
           </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
+        ) : null}
       </main>
     </div>
   );
