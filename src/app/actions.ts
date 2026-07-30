@@ -13,7 +13,7 @@ export interface ActionResult {
 }
 
 export async function deleteUser(userId: string): Promise<ActionResult> {
-  await requireAdmin();
+  const admin = await requireAdmin();
 
   if (!z.string().uuid().safeParse(userId).success) {
     return { ok: false, message: "Invalid user id." };
@@ -21,24 +21,49 @@ export async function deleteUser(userId: string): Promise<ActionResult> {
 
   const supabase = getSupabaseAdmin();
 
-  const { data, error } = await supabase
+  const { data: target, error: lookupError } = await supabase
     .from("site_users")
-    .delete()
+    .select("id, username, email")
     .eq("id", userId)
-    .select("username")
     .maybeSingle();
 
-  if (error || !data) {
-    console.error("User deletion failed:", error);
+  if (lookupError || !target) {
+    console.error("User lookup failed:", lookupError);
+    return { ok: false, message: "The account was not found." };
+  }
 
+  const { error: deleteError } = await supabase
+    .from("site_users")
+    .delete()
+    .eq("id", userId);
+
+  if (deleteError) {
+    console.error("User deletion failed:", deleteError);
     return { ok: false, message: "Failed to delete the account." };
+  }
+
+  const { error: auditError } = await supabase
+    .from("admin_audit_logs")
+    .insert({
+      admin_email: admin.email,
+      action: "delete_user",
+      target_user_id: target.id,
+      target_username: target.username,
+      target_email: target.email,
+      details: {
+        source: "crazy-sajangnim-admin",
+      },
+    });
+
+  if (auditError) {
+    console.error("Admin audit log failed:", auditError);
   }
 
   revalidatePath("/");
 
   return {
     ok: true,
-    message: `Deleted the account "${data.username}".`,
+    message: `Deleted the account "${target.username ?? target.email}".`,
   };
 }
 

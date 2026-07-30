@@ -18,8 +18,19 @@ interface SiteUserRow {
   avatar_url: string | null;
   email_verified: boolean | null;
   google_sub: string | null;
-  created_at: string;
+  given_name: string | null;
+  family_name: string | null;
+  google_locale: string | null;
+  google_hosted_domain: string | null;
+  browser_language: string | null;
+  browser_languages: string[] | null;
+  timezone: string | null;
+  country_code: string | null;
+  first_login_at: string | null;
   last_login_at: string | null;
+  login_count: number;
+  metadata_updated_at: string | null;
+  created_at: string;
 }
 
 function formatDate(value: string | null): string {
@@ -95,9 +106,12 @@ export default async function UsersPage() {
                   <th className="px-4 py-3">Account</th>
                   <th className="px-4 py-3">Username</th>
                   <th className="px-4 py-3">Email</th>
-                  <th className="px-4 py-3">Sign-in</th>
-                  <th className="px-4 py-3">Created</th>
+                  <th className="px-4 py-3">Google profile</th>
+                  <th className="px-4 py-3">Language</th>
+                  <th className="px-4 py-3">Location</th>
+                  <th className="px-4 py-3">First login</th>
                   <th className="px-4 py-3">Last login</th>
+                  <th className="px-4 py-3">Logins</th>
                   <th className="px-4 py-3">Actions</th>
                 </tr>
               </thead>
@@ -161,16 +175,39 @@ export default async function UsersPage() {
                       ) : null}
                     </td>
 
-                    <td className="px-4 py-4 text-neutral-600">
-                      {user.google_sub ? "Google" : "Password"}
+                    <td className="px-4 py-4 text-xs text-neutral-600">
+                      <p>{user.google_sub ? "Google" : "Password"}</p>
+                      <p>{user.given_name ?? "—"} {user.family_name ?? ""}</p>
+                      {user.google_hosted_domain ? (
+                        <p className="text-neutral-400">
+                          {user.google_hosted_domain}
+                        </p>
+                      ) : null}
+                    </td>
+
+                    <td className="px-4 py-4 text-xs text-neutral-600">
+                      <p>Google: {user.google_locale ?? "—"}</p>
+                      <p>Browser: {user.browser_language ?? "—"}</p>
+                      <p className="max-w-48 break-words text-neutral-400">
+                        {(user.browser_languages ?? []).join(", ") || "—"}
+                      </p>
+                    </td>
+
+                    <td className="px-4 py-4 text-xs text-neutral-600">
+                      <p>Country: {user.country_code ?? "—"}</p>
+                      <p>Time zone: {user.timezone ?? "—"}</p>
                     </td>
 
                     <td className="px-4 py-4 text-neutral-600">
-                      {formatDate(user.created_at)}
+                      {formatDate(user.first_login_at ?? user.created_at)}
                     </td>
 
                     <td className="px-4 py-4 text-neutral-600">
                       {formatDate(user.last_login_at)}
+                    </td>
+
+                    <td className="px-4 py-4 text-center font-semibold">
+                      {user.login_count ?? 0}
                     </td>
 
                     <td className="px-4 py-4">
