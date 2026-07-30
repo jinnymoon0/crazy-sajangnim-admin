@@ -7,10 +7,13 @@ import { removeAdminEmail } from "@/app/actions";
 
 interface AdminEmailRowProps {
   email: string;
-  isSelf: boolean;
 }
 
-export default function AdminEmailRow({ email, isSelf }: AdminEmailRowProps) {
+/*
+ * Rendered only for rows the current viewer is allowed to remove — the
+ * server action re-checks permission regardless.
+ */
+export default function AdminEmailRow({ email }: AdminEmailRowProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -35,10 +38,6 @@ export default function AdminEmailRow({ email, isSelf }: AdminEmailRowProps) {
 
       router.refresh();
     });
-  }
-
-  if (isSelf) {
-    return <span className="text-xs text-neutral-400">You</span>;
   }
 
   return (

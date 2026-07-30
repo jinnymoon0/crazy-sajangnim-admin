@@ -9,6 +9,7 @@ import {
   hashSecret,
 } from "@/lib/passwords";
 import { getSupabaseAdmin } from "@/lib/supabase";
+import { isSuperAdmin } from "@/lib/super-admin";
 
 export interface ActionResult {
   ok: boolean;
@@ -128,12 +129,19 @@ export async function removeAdminEmail(
 ): Promise<ActionResult> {
   const admin = await requireAdmin();
 
-  const normalized = email.trim().toLowerCase();
-
-  if (normalized === admin.email) {
+  if (!isSuperAdmin(admin.email)) {
     return {
       ok: false,
-      message: "You cannot remove your own admin access.",
+      message: "Only the super admin can remove admins.",
+    };
+  }
+
+  const normalized = email.trim().toLowerCase();
+
+  if (isSuperAdmin(normalized)) {
+    return {
+      ok: false,
+      message: "The super admin cannot be removed.",
     };
   }
 

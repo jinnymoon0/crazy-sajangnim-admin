@@ -3,6 +3,7 @@ import AdminEmailRow from "@/components/AdminEmailRow";
 import AdminNav from "@/components/AdminNav";
 import { requireAdmin } from "@/lib/require-admin";
 import { getSupabaseAdmin } from "@/lib/supabase";
+import { isSuperAdmin } from "@/lib/super-admin";
 
 export const dynamic = "force-dynamic";
 
@@ -53,7 +54,7 @@ export default async function AdminsPage() {
 
         <p className="mt-2 text-sm text-neutral-500">
           Anyone whose Gmail address is on this list can sign in to this
-          dashboard with Google.
+          dashboard with Google. Only the super admin can remove admins.
         </p>
 
         <form
@@ -108,10 +109,18 @@ export default async function AdminsPage() {
                   </td>
 
                   <td className="px-5 py-4">
-                    <AdminEmailRow
-                      email={entry.email}
-                      isSelf={entry.email === admin.email}
-                    />
+                    {isSuperAdmin(entry.email) ? (
+                      <span className="rounded-full bg-neutral-950 px-2.5 py-1 text-xs font-semibold text-white">
+                        Super admin
+                        {entry.email === admin.email ? " · you" : ""}
+                      </span>
+                    ) : isSuperAdmin(admin.email) ? (
+                      <AdminEmailRow email={entry.email} />
+                    ) : entry.email === admin.email ? (
+                      <span className="text-xs text-neutral-400">You</span>
+                    ) : (
+                      <span className="text-xs text-neutral-300">—</span>
+                    )}
                   </td>
                 </tr>
               ))}
