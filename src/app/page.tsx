@@ -5,9 +5,19 @@ import { getSupabaseAdmin } from "@/lib/supabase";
 
 export const dynamic = "force-dynamic";
 
+/*
+ * One row per site account. Every profile field Google shares during
+ * sign-in is stored and shown here; passwords do not exist under
+ * Google login, so accounts can only be deleted, never inspected.
+ */
 interface SiteUserRow {
   id: string;
-  username: string;
+  username: string | null;
+  email: string | null;
+  full_name: string | null;
+  avatar_url: string | null;
+  email_verified: boolean | null;
+  google_sub: string | null;
   created_at: string;
   last_login_at: string | null;
 }
@@ -34,7 +44,7 @@ async function getUsers(): Promise<{
 
   const { data, error } = await supabase
     .from("site_users")
-    .select("id, username, created_at, last_login_at")
+    .select("*")
     .order("created_at", { ascending: false })
     .limit(1000);
 
@@ -60,13 +70,13 @@ export default async function UsersPage() {
     <div className="min-h-screen bg-neutral-50 text-neutral-900">
       <AdminNav adminEmail={admin.email} active="users" />
 
-      <main className="mx-auto max-w-5xl px-6 py-10">
+      <main className="mx-auto max-w-6xl px-6 py-10">
         <h1 className="text-2xl font-bold">Site users</h1>
 
         <p className="mt-2 text-sm text-neutral-500">
           {users.length} {users.length === 1 ? "account" : "accounts"}.
-          Passwords are stored as one-way hashes — they cannot be viewed,
-          only reset.
+          Everything Google shares at sign-in is shown below. Sign-in is
+          handled by Google, so there are no passwords to view or reset.
         </p>
 
         {!tablesReady ? (
@@ -82,10 +92,13 @@ export default async function UsersPage() {
             <table className="w-full text-left text-sm">
               <thead className="border-b border-neutral-200 text-xs uppercase tracking-wide text-neutral-500">
                 <tr>
-                  <th className="px-5 py-3">Username</th>
-                  <th className="px-5 py-3">Created</th>
-                  <th className="px-5 py-3">Last login</th>
-                  <th className="px-5 py-3">Actions</th>
+                  <th className="px-4 py-3">Account</th>
+                  <th className="px-4 py-3">Username</th>
+                  <th className="px-4 py-3">Email</th>
+                  <th className="px-4 py-3">Sign-in</th>
+                  <th className="px-4 py-3">Created</th>
+                  <th className="px-4 py-3">Last login</th>
+                  <th className="px-4 py-3">Actions</th>
                 </tr>
               </thead>
 
@@ -95,22 +108,77 @@ export default async function UsersPage() {
                     key={user.id}
                     className="border-b border-neutral-100 align-top last:border-b-0"
                   >
-                    <td className="px-5 py-4 font-semibold">
-                      {user.username}
+                    <td className="px-4 py-4">
+                      <div className="flex items-center gap-3">
+                        {user.avatar_url ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={user.avatar_url}
+                            alt=""
+                            referrerPolicy="no-referrer"
+                            className="h-9 w-9 rounded-full border border-neutral-200"
+                          />
+                        ) : (
+                          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-neutral-200 text-xs font-bold text-neutral-500">
+                            {(user.username ?? user.full_name ?? "?")
+                              .slice(0, 1)
+                              .toUpperCase()}
+                          </div>
+                        )}
+
+                        <div>
+                          <p className="font-semibold">
+                            {user.full_name ?? "—"}
+                          </p>
+
+                          {user.google_sub ? (
+                            <p className="text-xs text-neutral-400">
+                              Google · {user.google_sub.slice(0, 12)}…
+                            </p>
+                          ) : (
+                            <p className="text-xs text-amber-600">
+                              Legacy password account
+                            </p>
+                          )}
+                        </div>
+                      </div>
                     </td>
 
-                    <td className="px-5 py-4 text-neutral-600">
+                    <td className="px-4 py-4 font-semibold">
+                      {user.username ?? (
+                        <span className="font-normal text-neutral-400">
+                          not chosen yet
+                        </span>
+                      )}
+                    </td>
+
+                    <td className="px-4 py-4 text-neutral-600">
+                      {user.email ?? "—"}
+                      {user.email_verified === true ? (
+                        <span className="ml-1.5 rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700">
+                          verified
+                        </span>
+                      ) : null}
+                    </td>
+
+                    <td className="px-4 py-4 text-neutral-600">
+                      {user.google_sub ? "Google" : "Password"}
+                    </td>
+
+                    <td className="px-4 py-4 text-neutral-600">
                       {formatDate(user.created_at)}
                     </td>
 
-                    <td className="px-5 py-4 text-neutral-600">
+                    <td className="px-4 py-4 text-neutral-600">
                       {formatDate(user.last_login_at)}
                     </td>
 
-                    <td className="px-5 py-4">
+                    <td className="px-4 py-4">
                       <UserActions
                         userId={user.id}
-                        username={user.username}
+                        username={
+                          user.username ?? user.email ?? user.id.slice(0, 8)
+                        }
                       />
                     </td>
                   </tr>

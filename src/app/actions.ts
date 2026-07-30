@@ -4,56 +4,12 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { requireAdmin } from "@/lib/require-admin";
-import {
-  generateTemporaryPassword,
-  hashSecret,
-} from "@/lib/passwords";
 import { getSupabaseAdmin } from "@/lib/supabase";
 import { isSuperAdmin } from "@/lib/super-admin";
 
 export interface ActionResult {
   ok: boolean;
   message: string;
-  temporaryPassword?: string;
-}
-
-/*
- * Issue a one-time temporary password for a site user. The password is
- * shown to the admin exactly once and stored only as a hash; every
- * existing session for the user is revoked.
- */
-export async function resetUserPassword(
-  userId: string,
-): Promise<ActionResult> {
-  await requireAdmin();
-
-  if (!z.string().uuid().safeParse(userId).success) {
-    return { ok: false, message: "Invalid user id." };
-  }
-
-  const supabase = getSupabaseAdmin();
-  const temporaryPassword = generateTemporaryPassword();
-
-  const { data, error } = await supabase
-    .from("site_users")
-    .update({ password_hash: hashSecret(temporaryPassword) })
-    .eq("id", userId)
-    .select("username")
-    .maybeSingle();
-
-  if (error || !data) {
-    console.error("Password reset failed:", error);
-
-    return { ok: false, message: "Failed to reset the password." };
-  }
-
-  await supabase.from("site_sessions").delete().eq("user_id", userId);
-
-  return {
-    ok: true,
-    message: `Temporary password for ${data.username} — share it privately; it is shown only once:`,
-    temporaryPassword,
-  };
 }
 
 export async function deleteUser(userId: string): Promise<ActionResult> {
