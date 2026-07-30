@@ -167,7 +167,10 @@ export default async function UsersPage() {
                   <th className="px-4 py-3">First login</th>
                   <th className="px-4 py-3">Last login</th>
                   <th className="px-4 py-3">Logins</th>
-                  <th className="px-4 py-3">Actions</th>
+                  {/* Pinned so it stays reachable while the wide table scrolls. */}
+                  <th className="sticky right-0 z-10 border-l border-neutral-200 bg-neutral-50 px-4 py-3">
+                    Actions
+                  </th>
                 </tr>
               </thead>
 
@@ -315,7 +318,7 @@ export default async function UsersPage() {
                       {user.login_count ?? 0}
                     </td>
 
-                    <td className="px-4 py-4">
+                    <td className="sticky right-0 z-10 border-l border-neutral-200 bg-white px-4 py-4">
                       <UserActions
                         userId={user.id}
                         username={
