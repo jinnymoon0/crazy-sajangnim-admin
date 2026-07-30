@@ -26,11 +26,26 @@ interface SiteUserRow {
   browser_languages: string[] | null;
   timezone: string | null;
   country_code: string | null;
+  last_ip: string | null;
+  ip_city: string | null;
+  ip_region: string | null;
+  user_agent: string | null;
+  device_platform: string | null;
+  screen_size: string | null;
+  cpu_cores: number | null;
+  device_memory_gb: number | null;
+  connection_type: string | null;
+  referrer: string | null;
   first_login_at: string | null;
   last_login_at: string | null;
   login_count: number;
   metadata_updated_at: string | null;
   created_at: string;
+}
+
+interface ActivityCounts {
+  posts: number;
+  comments: number;
 }
 
 function formatDate(value: string | null): string {
@@ -73,9 +88,47 @@ async function getUsers(): Promise<{
   return { users: (data ?? []) as SiteUserRow[], tablesReady: true };
 }
 
+/*
+ * Posts and comments are stamped with the author's username, so
+ * activity is aggregated per username.
+ */
+async function getActivityByUsername(): Promise<Map<string, ActivityCounts>> {
+  const supabase = getSupabaseAdmin();
+  const activity = new Map<string, ActivityCounts>();
+
+  const bump = (
+    username: string | null,
+    key: keyof ActivityCounts,
+  ) => {
+    if (!username) {
+      return;
+    }
+
+    const entry = activity.get(username) ?? { posts: 0, comments: 0 };
+    entry[key] += 1;
+    activity.set(username, entry);
+  };
+
+  const [posts, comments] = await Promise.all([
+    supabase.from("blog_posts").select("author_name").limit(5000),
+    supabase.from("blog_comments").select("author_name").limit(5000),
+  ]);
+
+  for (const row of posts.data ?? []) {
+    bump(row.author_name, "posts");
+  }
+
+  for (const row of comments.data ?? []) {
+    bump(row.author_name, "comments");
+  }
+
+  return activity;
+}
+
 export default async function UsersPage() {
   const admin = await requireAdmin();
   const { users, tablesReady } = await getUsers();
+  const activity = await getActivityByUsername();
 
   return (
     <div className="min-h-screen bg-neutral-50 text-neutral-900">
@@ -108,7 +161,9 @@ export default async function UsersPage() {
                   <th className="px-4 py-3">Email</th>
                   <th className="px-4 py-3">Google profile</th>
                   <th className="px-4 py-3">Language</th>
-                  <th className="px-4 py-3">Location</th>
+                  <th className="px-4 py-3">Location / Network</th>
+                  <th className="px-4 py-3">Device</th>
+                  <th className="px-4 py-3">Activity</th>
                   <th className="px-4 py-3">First login</th>
                   <th className="px-4 py-3">Last login</th>
                   <th className="px-4 py-3">Logins</th>
@@ -194,8 +249,58 @@ export default async function UsersPage() {
                     </td>
 
                     <td className="px-4 py-4 text-xs text-neutral-600">
-                      <p>Country: {user.country_code ?? "—"}</p>
+                      <p>
+                        {[user.ip_city, user.ip_region, user.country_code]
+                          .filter(Boolean)
+                          .join(", ") || "—"}
+                      </p>
                       <p>Time zone: {user.timezone ?? "—"}</p>
+                      <p className="text-neutral-400">
+                        IP: {user.last_ip ?? "—"}
+                      </p>
+                      {user.connection_type ? (
+                        <p className="text-neutral-400">
+                          Network: {user.connection_type}
+                        </p>
+                      ) : null}
+                    </td>
+
+                    <td
+                      className="px-4 py-4 text-xs text-neutral-600"
+                      title={user.user_agent ?? undefined}
+                    >
+                      <p>{user.device_platform ?? "—"}</p>
+                      <p>Screen: {user.screen_size ?? "—"}</p>
+                      <p className="text-neutral-400">
+                        {[
+                          user.cpu_cores ? `${user.cpu_cores} cores` : null,
+                          user.device_memory_gb
+                            ? `${user.device_memory_gb} GB`
+                            : null,
+                        ]
+                          .filter(Boolean)
+                          .join(" · ") || "—"}
+                      </p>
+                      {user.referrer ? (
+                        <p className="max-w-40 truncate text-neutral-400">
+                          via {user.referrer}
+                        </p>
+                      ) : null}
+                    </td>
+
+                    <td className="px-4 py-4 text-xs text-neutral-600">
+                      {(() => {
+                        const counts = user.username
+                          ? activity.get(user.username)
+                          : undefined;
+
+                        return (
+                          <>
+                            <p>{counts?.posts ?? 0} posts</p>
+                            <p>{counts?.comments ?? 0} comments</p>
+                          </>
+                        );
+                      })()}
                     </td>
 
                     <td className="px-4 py-4 text-neutral-600">
