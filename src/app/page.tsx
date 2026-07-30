@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 import AdminNav from "@/components/AdminNav";
 import UserActions from "@/components/UserActions";
 import { requireAdmin } from "@/lib/require-admin";
@@ -181,7 +183,10 @@ export default async function UsersPage() {
                     className="border-b border-neutral-100 align-top last:border-b-0"
                   >
                     <td className="px-4 py-4">
-                      <div className="flex items-center gap-3">
+                      <Link
+                        href={`/users/${user.id}`}
+                        className="flex items-center gap-3 transition hover:opacity-70"
+                      >
                         {user.avatar_url ? (
                           // eslint-disable-next-line @next/next/no-img-element
                           <img
@@ -213,7 +218,7 @@ export default async function UsersPage() {
                             </p>
                           )}
                         </div>
-                      </div>
+                      </Link>
                     </td>
 
                     <td className="px-4 py-4 font-semibold">

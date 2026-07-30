@@ -8,9 +8,15 @@ import { type ActionResult, deleteUser } from "@/app/actions";
 interface UserActionsProps {
   userId: string;
   username: string;
+  /** Where to go after a successful delete; defaults to refreshing. */
+  redirectTo?: string;
 }
 
-export default function UserActions({ userId, username }: UserActionsProps) {
+export default function UserActions({
+  userId,
+  username,
+  redirectTo,
+}: UserActionsProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [result, setResult] = useState<ActionResult | null>(null);
@@ -30,6 +36,10 @@ export default function UserActions({ userId, username }: UserActionsProps) {
       setResult(outcome.ok ? null : outcome);
 
       if (outcome.ok) {
+        if (redirectTo) {
+          router.push(redirectTo);
+        }
+
         router.refresh();
       }
     });
