@@ -15,6 +15,7 @@ interface Brand {
   addedBy: string | null;
   createdAt: string | null;
   productCount?: number;
+  storeDomain?: string | null;
 }
 
 async function getBrands(): Promise<{
@@ -82,6 +83,7 @@ export default async function BrandsPage() {
                 <tr>
                   <th className="px-4 py-3">Brand</th>
                   <th className="px-4 py-3">Sale items</th>
+                  <th className="px-4 py-3">Own shop</th>
                   <th className="px-4 py-3">Korean</th>
                   <th className="px-4 py-3">Also matched as</th>
                   <th className="px-4 py-3">Added by</th>
@@ -114,6 +116,26 @@ export default async function BrandsPage() {
                           title="The brand is tracked, but the retailers have nothing from it on sale right now."
                         >
                           none on sale
+                        </span>
+                      )}
+                    </td>
+
+                    <td className="px-4 py-4 text-xs">
+                      {brand.storeDomain ? (
+                        <a
+                          href={`https://${brand.storeDomain}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-neutral-600 underline underline-offset-2 hover:text-neutral-950"
+                        >
+                          {brand.storeDomain}
+                        </a>
+                      ) : (
+                        <span
+                          className="text-neutral-400"
+                          title="No shop of the brand's own was found, so its sale items come from the retailers only."
+                        >
+                          —
                         </span>
                       )}
                     </td>
