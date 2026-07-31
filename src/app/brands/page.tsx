@@ -14,6 +14,7 @@ interface Brand {
   isActive: boolean;
   addedBy: string | null;
   createdAt: string | null;
+  productCount?: number;
 }
 
 async function getBrands(): Promise<{
@@ -29,7 +30,7 @@ async function getBrands(): Promise<{
   }
 
   try {
-    const response = await backendFetch("/api/brands?includeInactive=true");
+    const response = await backendFetch("/api/brands?includeInactive=true&withCounts=true");
 
     if (!response.ok) {
       return {
@@ -80,6 +81,7 @@ export default async function BrandsPage() {
               <thead className="border-b border-neutral-200 text-xs uppercase tracking-wide text-neutral-500">
                 <tr>
                   <th className="px-4 py-3">Brand</th>
+                  <th className="px-4 py-3">Sale items</th>
                   <th className="px-4 py-3">Korean</th>
                   <th className="px-4 py-3">Also matched as</th>
                   <th className="px-4 py-3">Added by</th>
@@ -99,6 +101,21 @@ export default async function BrandsPage() {
                       <p className="font-mono text-xs text-neutral-400">
                         {brand.slug}
                       </p>
+                    </td>
+
+                    <td className="px-4 py-4">
+                      {brand.productCount ? (
+                        <span className="font-semibold">
+                          {brand.productCount}
+                        </span>
+                      ) : (
+                        <span
+                          className="text-xs text-amber-700"
+                          title="The brand is tracked, but the retailers have nothing from it on sale right now."
+                        >
+                          none on sale
+                        </span>
+                      )}
                     </td>
 
                     <td className="px-4 py-4 text-neutral-600">
