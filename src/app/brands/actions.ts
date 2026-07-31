@@ -22,6 +22,8 @@ export interface BrandActionResult {
   candidates?: BrandCandidate[];
   /** Set once a brand is stored, so its sale items can be collected. */
   slug?: string;
+  /** The brand's own shop, when one was found while adding it. */
+  store?: { domain: string; platform: string; market: string } | null;
 }
 
 function errorMessage(body: unknown, fallback: string): string {
@@ -133,13 +135,19 @@ export async function addBrand(input: {
 
     revalidatePath("/brands");
 
-    const slug =
-      (body as { brand?: { slug?: string } } | null)?.brand?.slug ??
-      input.slug;
+    const brand = (body as {
+      brand?: {
+        slug?: string;
+        store?: { domain: string; platform: string; market: string } | null;
+      };
+    } | null)?.brand;
+
+    const slug = brand?.slug ?? input.slug;
 
     return {
       ok: true,
       slug,
+      store: brand?.store ?? null,
       message: `${input.englishName.toUpperCase()} is now tracked for the US and Korean stores.`,
     };
   } catch (error) {
@@ -155,6 +163,7 @@ export async function addBrand(input: {
  */
 export async function collectBrand(
   slug: string,
+  options: { isNew?: boolean } = {},
 ): Promise<BrandActionResult> {
   await requireAdmin();
 
@@ -182,10 +191,27 @@ export async function collectBrand(
     const us = result.collected?.US ?? 0;
     const kr = result.collected?.KR ?? 0;
 
+    const name = result.englishName ?? slug;
+
     if (us + kr === 0) {
+      /*
+       * A brand only earns a place in the shop by having something on
+       * sale, so drop the one just added rather than leaving an empty
+       * filter behind. Brands already in the shop are left alone — they
+       * have simply sold through, and the nightly run will refill them.
+       */
+      if (options.isNew) {
+        await removeBrand(slug);
+
+        return {
+          ok: false,
+          message: `${name} was not added: nothing from this brand is on sale at the shops we search right now. Try again when it goes on sale.`,
+        };
+      }
+
       return {
         ok: true,
-        message: `${result.englishName ?? slug} is tracked, but no sale items were on the retailers just now. The nightly refresh will keep looking.`,
+        message: `${name} is tracked, but no sale items were on the retailers just now. The nightly refresh will keep looking.`,
       };
     }
 
