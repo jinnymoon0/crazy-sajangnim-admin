@@ -20,6 +20,8 @@ export interface BrandActionResult {
   message: string;
   /** Present when the name needs resolving before it can be added. */
   candidates?: BrandCandidate[];
+  /** Set once a brand is stored, so its sale items can be collected. */
+  slug?: string;
 }
 
 function errorMessage(body: unknown, fallback: string): string {
@@ -131,14 +133,76 @@ export async function addBrand(input: {
 
     revalidatePath("/brands");
 
+    const slug =
+      (body as { brand?: { slug?: string } } | null)?.brand?.slug ??
+      input.slug;
+
     return {
       ok: true,
-      message: `${input.englishName.toUpperCase()} is now tracked for the US and Korean stores. It will appear in the catalog after the next collection run.`,
+      slug,
+      message: `${input.englishName.toUpperCase()} is now tracked for the US and Korean stores.`,
     };
   } catch (error) {
     console.error("Brand add failed:", error);
 
     return { ok: false, message: "The product service could not be reached." };
+  }
+}
+
+/*
+ * Collect a brand's sale items immediately, so a brand added now shows
+ * products now rather than after the nightly refresh.
+ */
+export async function collectBrand(
+  slug: string,
+): Promise<BrandActionResult> {
+  await requireAdmin();
+
+  try {
+    const response = await backendFetch(
+      `/api/brands/${encodeURIComponent(slug)}/collect`,
+      { method: "POST" },
+    );
+
+    const body: unknown = await response.json().catch(() => null);
+
+    if (!response.ok) {
+      return {
+        ok: false,
+        message: errorMessage(body, "The collection run failed."),
+      };
+    }
+
+    const result = body as {
+      englishName?: string;
+      collected?: Record<string, number>;
+      saved?: number;
+    };
+
+    const us = result.collected?.US ?? 0;
+    const kr = result.collected?.KR ?? 0;
+
+    if (us + kr === 0) {
+      return {
+        ok: true,
+        message: `${result.englishName ?? slug} is tracked, but no sale items were on the retailers just now. The nightly refresh will keep looking.`,
+      };
+    }
+
+    revalidatePath("/brands");
+
+    return {
+      ok: true,
+      message: `${result.englishName ?? slug}: ${us} US and ${kr} Korean sale items are now in the shop.`,
+    };
+  } catch (error) {
+    console.error("Brand collection failed:", error);
+
+    return {
+      ok: false,
+      message:
+        "The brand was added, but the collection run could not be reached.",
+    };
   }
 }
 

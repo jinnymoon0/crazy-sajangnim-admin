@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 
 import {
   addBrand,
+  collectBrand,
   submitBrand,
   type BrandActionResult,
   type BrandCandidate,
@@ -16,6 +17,33 @@ export default function BrandBar() {
   const [name, setName] = useState("");
   const [result, setResult] = useState<BrandActionResult | null>(null);
   const [candidates, setCandidates] = useState<BrandCandidate[]>([]);
+  const [isCollecting, setIsCollecting] = useState(false);
+
+  /*
+   * Adding a brand is only half the job — its sale items have to be
+   * collected before anything shows in the shop, so do that here
+   * rather than leaving it until the nightly refresh.
+   */
+  async function collectAfterAdd(outcome: BrandActionResult) {
+    setResult(outcome);
+
+    if (!outcome.ok || !outcome.slug) {
+      return;
+    }
+
+    setCandidates([]);
+    setName("");
+    setIsCollecting(true);
+
+    try {
+      const collected = await collectBrand(outcome.slug);
+
+      setResult(collected);
+    } finally {
+      setIsCollecting(false);
+      router.refresh();
+    }
+  }
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -25,14 +53,16 @@ export default function BrandBar() {
     startTransition(async () => {
       const outcome = await submitBrand(formData);
 
-      setResult(outcome);
       setCandidates(outcome.candidates ?? []);
 
-      // Added outright — nothing left to choose.
-      if (outcome.ok && !outcome.candidates) {
-        setName("");
-        router.refresh();
+      // Candidates came back, so the admin still has to choose one.
+      if (outcome.candidates) {
+        setResult(outcome);
+
+        return;
       }
+
+      await collectAfterAdd(outcome);
     });
   }
 
@@ -45,13 +75,7 @@ export default function BrandBar() {
         slug: candidate.slug,
       });
 
-      setResult(outcome);
-
-      if (outcome.ok) {
-        setCandidates([]);
-        setName("");
-        router.refresh();
-      }
+      await collectAfterAdd(outcome);
     });
   }
 
@@ -78,14 +102,23 @@ export default function BrandBar() {
 
         <button
           type="submit"
-          disabled={isPending}
+          disabled={isPending || isCollecting}
           className="rounded-xl bg-neutral-950 px-5 py-3 text-sm font-bold text-white transition hover:bg-neutral-800 disabled:cursor-not-allowed disabled:opacity-50"
         >
-          {isPending ? "Working..." : "Add brand"}
+          {isCollecting
+            ? "Collecting sale items..."
+            : isPending
+              ? "Working..."
+              : "Add brand"}
         </button>
       </form>
 
-      {result ? (
+      {isCollecting ? (
+        <p role="status" className="mt-3 text-sm text-neutral-600">
+          Added. Searching the retailers for sale items — this takes about
+          half a minute.
+        </p>
+      ) : result ? (
         <p
           role="status"
           className={`mt-3 text-sm ${
