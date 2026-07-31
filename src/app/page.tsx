@@ -160,6 +160,7 @@ export default async function UsersPage() {
                 <tr>
                   <th className="px-4 py-3">Account</th>
                   <th className="px-4 py-3">Username</th>
+                  <th className="px-4 py-3">IP address</th>
                   <th className="px-4 py-3">Email</th>
                   <th className="px-4 py-3">Google profile</th>
                   <th className="px-4 py-3">Language</th>
@@ -227,6 +228,19 @@ export default async function UsersPage() {
                           not chosen yet
                         </span>
                       )}
+                    </td>
+
+                    {/* Kept early so it is readable without scrolling. */}
+                    <td className="px-4 py-4">
+                      <p className="font-mono text-xs text-neutral-800">
+                        {user.last_ip ?? "—"}
+                      </p>
+
+                      <p className="mt-1 text-xs text-neutral-400">
+                        {[user.ip_city, user.country_code]
+                          .filter(Boolean)
+                          .join(", ") || "—"}
+                      </p>
                     </td>
 
                     <td className="px-4 py-4 text-neutral-600">
