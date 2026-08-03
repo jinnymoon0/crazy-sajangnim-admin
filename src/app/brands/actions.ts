@@ -168,8 +168,15 @@ export async function collectBrand(
   await requireAdmin();
 
   try {
+    /*
+     * The backend drops the brand itself when a run for a newly added
+     * one comes back empty, so the rule holds however the brand was
+     * added rather than only through this page.
+     */
     const response = await backendFetch(
-      `/api/brands/${encodeURIComponent(slug)}/collect`,
+      `/api/brands/${encodeURIComponent(slug)}/collect${
+        options.isNew ? "?dropIfEmpty=true" : ""
+      }`,
       { method: "POST" },
     );
 
@@ -184,8 +191,10 @@ export async function collectBrand(
 
     const result = body as {
       englishName?: string;
+      storeDomain?: string | null;
       collected?: Record<string, number>;
       saved?: number;
+      removed?: boolean;
     };
 
     const us = result.collected?.US ?? 0;
@@ -200,12 +209,12 @@ export async function collectBrand(
        * filter behind. Brands already in the shop are left alone — they
        * have simply sold through, and the nightly run will refill them.
        */
-      if (options.isNew) {
-        await removeBrand(slug);
+      if (result.removed) {
+        revalidatePath("/brands");
 
         return {
           ok: false,
-          message: `${name} was not added: nothing from this brand is on sale at the shops we search right now. Try again when it goes on sale.`,
+          message: `${name} was not added: nothing from this brand is on sale, either at its own website or at the sale sites we search. Try again when it goes on sale.`,
         };
       }
 
@@ -219,7 +228,9 @@ export async function collectBrand(
 
     return {
       ok: true,
-      message: `${result.englishName ?? slug}: ${us} US and ${kr} Korean sale items are now in the shop.`,
+      message: `${name}: ${us} US and ${kr} Korean sale items are now in the shop${
+        result.storeDomain ? `, including its own site ${result.storeDomain}` : ""
+      }.`,
     };
   } catch (error) {
     console.error("Brand collection failed:", error);
