@@ -1,0 +1,265 @@
+import Link from "next/link";
+
+import AdminNav from "@/components/AdminNav";
+import { requireAdmin } from "@/lib/require-admin";
+import { getSupabaseAdmin } from "@/lib/supabase";
+
+export const dynamic = "force-dynamic";
+
+const PAGE_SIZE = 1000;
+
+interface VisitRow {
+  id: string;
+  visitor_id: string;
+  user_id: string | null;
+  visit_date: string;
+  first_seen_at: string;
+  last_seen_at: string;
+  page_views: number;
+  ip_address: string | null;
+  ip_country: string | null;
+  ip_city: string | null;
+  ip_region: string | null;
+  referrer: string | null;
+  landing_path: string | null;
+  user_agent: string | null;
+  device_platform: string | null;
+  screen_size: string | null;
+  timezone: string | null;
+  browser_language: string | null;
+  connection_type: string | null;
+}
+
+function formatDateTime(value: string | null): string {
+  if (!value) {
+    return "—";
+  }
+
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(new Date(value));
+}
+
+async function getVisits(): Promise<{
+  visits: VisitRow[];
+  names: Map<string, string>;
+  tableReady: boolean;
+}> {
+  const supabase = getSupabaseAdmin();
+
+  const visits: VisitRow[] = [];
+
+  // A response is capped at a thousand rows however large a limit is
+  // asked for, so read it a page at a time.
+  for (let page = 0; ; page += 1) {
+    const from = page * PAGE_SIZE;
+
+    const { data, error } = await supabase
+      .from("site_visits")
+      .select("*")
+      .order("last_seen_at", { ascending: false })
+      .range(from, from + PAGE_SIZE - 1);
+
+    if (error) {
+      if (error.code !== "42P01" && error.code !== "PGRST205") {
+        console.error("Visit list failed:", error.message);
+      }
+
+      return { visits: [], names: new Map(), tableReady: false };
+    }
+
+    const rows = (data ?? []) as VisitRow[];
+
+    visits.push(...rows);
+
+    // Two thousand days of visits is more than the page needs to show.
+    if (rows.length < PAGE_SIZE || visits.length >= 2000) {
+      break;
+    }
+  }
+
+  const userIds = Array.from(
+    new Set(
+      visits
+        .map((visit) => visit.user_id)
+        .filter((id): id is string => Boolean(id)),
+    ),
+  );
+
+  const names = new Map<string, string>();
+
+  if (userIds.length > 0) {
+    const { data } = await supabase
+      .from("site_users")
+      .select("id, username")
+      .in("id", userIds);
+
+    for (const row of (data ?? []) as {
+      id: string;
+      username: string | null;
+    }[]) {
+      if (row.username) {
+        names.set(row.id, row.username);
+      }
+    }
+  }
+
+  return { visits, names, tableReady: true };
+}
+
+export default async function VisitsPage() {
+  const admin = await requireAdmin();
+  const { visits, names, tableReady } = await getVisits();
+
+  const signedIn = visits.filter((visit) => visit.user_id).length;
+  const browsers = new Set(visits.map((visit) => visit.visitor_id)).size;
+  const views = visits.reduce((sum, visit) => sum + (visit.page_views ?? 0), 0);
+
+  return (
+    <div className="min-h-screen bg-neutral-50 text-neutral-900">
+      <AdminNav adminEmail={admin.email} active="visits" />
+
+      <main className="mx-auto max-w-6xl px-6 py-10">
+        <header>
+          <h1 className="text-2xl font-bold">Visits</h1>
+
+          <p className="mt-1 text-sm text-neutral-500">
+            Everyone who opened the shop, signed in or not. One row per
+            browser per day.
+          </p>
+        </header>
+
+        {!tableReady ? (
+          <p className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+            The site_visits table does not exist yet. Run supabase/visits.sql
+            from the shopping site repository.
+          </p>
+        ) : visits.length === 0 ? (
+          <p className="mt-6 rounded-2xl border border-neutral-200 bg-white p-6 text-sm text-neutral-500">
+            No visits recorded yet.
+          </p>
+        ) : (
+          <>
+            <div className="mt-6 grid gap-4 sm:grid-cols-4">
+              {[
+                ["Visits", visits.length],
+                ["Browsers", browsers],
+                ["Page views", views],
+                ["Signed in", signedIn],
+              ].map(([label, value]) => (
+                <div
+                  key={String(label)}
+                  className="rounded-2xl border border-neutral-200 bg-white p-5"
+                >
+                  <p className="text-xs font-semibold uppercase tracking-wide text-neutral-500">
+                    {label}
+                  </p>
+
+                  <p className="mt-2 text-3xl font-bold">{value}</p>
+                </div>
+              ))}
+            </div>
+
+            <div className="mt-6 overflow-x-auto rounded-2xl border border-neutral-200 bg-white">
+              <table className="w-full min-w-[64rem] text-left text-sm">
+                <thead className="border-b border-neutral-200 text-xs uppercase tracking-wide text-neutral-500">
+                  <tr>
+                    <th className="px-4 py-3">Who</th>
+                    <th className="px-4 py-3">Where from</th>
+                    <th className="px-4 py-3">Came via</th>
+                    <th className="px-4 py-3">Device</th>
+                    <th className="px-4 py-3">Views</th>
+                    <th className="px-4 py-3">Last seen</th>
+                  </tr>
+                </thead>
+
+                <tbody>
+                  {visits.map((visit) => (
+                    <tr
+                      key={visit.id}
+                      className="border-b border-neutral-100 align-top last:border-b-0"
+                    >
+                      <td className="px-4 py-4">
+                        {visit.user_id ? (
+                          <Link
+                            href={`/users/${visit.user_id}`}
+                            className="font-semibold underline decoration-neutral-300 underline-offset-2 hover:decoration-neutral-950"
+                          >
+                            {names.get(visit.user_id) ?? "(no username)"}
+                          </Link>
+                        ) : (
+                          <span className="text-neutral-500">
+                            not signed in
+                          </span>
+                        )}
+
+                        <p className="font-mono text-[11px] text-neutral-400">
+                          {visit.visitor_id.slice(0, 8)}
+                        </p>
+                      </td>
+
+                      <td className="px-4 py-4 text-xs text-neutral-600">
+                        <p className="font-mono">{visit.ip_address ?? "—"}</p>
+
+                        <p className="text-neutral-500">
+                          {[visit.ip_city, visit.ip_region, visit.ip_country]
+                            .filter(Boolean)
+                            .join(", ") || "—"}
+                        </p>
+                      </td>
+
+                      <td className="px-4 py-4 text-xs text-neutral-600">
+                        <p className="max-w-56 truncate" title={visit.referrer ?? ""}>
+                          {visit.referrer ?? "direct"}
+                        </p>
+
+                        <p className="max-w-56 truncate font-mono text-neutral-400">
+                          {visit.landing_path ?? "—"}
+                        </p>
+                      </td>
+
+                      <td className="px-4 py-4 text-xs text-neutral-600">
+                        <p>
+                          {visit.device_platform ?? "—"}
+                          {visit.screen_size ? ` · ${visit.screen_size}` : ""}
+                        </p>
+
+                        <p
+                          className="max-w-56 truncate text-neutral-400"
+                          title={visit.user_agent ?? ""}
+                        >
+                          {visit.user_agent ?? "—"}
+                        </p>
+
+                        <p className="text-neutral-400">
+                          {[
+                            visit.browser_language,
+                            visit.timezone,
+                            visit.connection_type,
+                          ]
+                            .filter(Boolean)
+                            .join(" · ") || "—"}
+                        </p>
+                      </td>
+
+                      <td className="px-4 py-4 text-center font-semibold">
+                        {visit.page_views}
+                      </td>
+
+                      <td className="px-4 py-4 text-xs text-neutral-600">
+                        {formatDateTime(visit.last_seen_at)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
+      </main>
+    </div>
+  );
+}
