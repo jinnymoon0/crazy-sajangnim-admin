@@ -36,7 +36,7 @@ export default function BrandBar() {
     setIsCollecting(true);
 
     try {
-      const collected = await collectBrand(outcome.slug);
+      const collected = await collectBrand(outcome.slug, { isNew: true });
 
       setResult(collected);
     } finally {
@@ -115,8 +115,9 @@ export default function BrandBar() {
 
       {isCollecting ? (
         <p role="status" className="mt-3 text-sm text-neutral-600">
-          Added. Searching the retailers for sale items — this takes about
-          half a minute.
+          {result?.store
+            ? `Found the brand's own shop at ${result.store.domain}. Searching it and the retailers for sale items — this takes about half a minute.`
+            : "Added. Searching the retailers for sale items — this takes about half a minute."}
         </p>
       ) : result ? (
         <p

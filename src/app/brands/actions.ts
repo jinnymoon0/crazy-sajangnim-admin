@@ -22,6 +22,8 @@ export interface BrandActionResult {
   candidates?: BrandCandidate[];
   /** Set once a brand is stored, so its sale items can be collected. */
   slug?: string;
+  /** The brand's own shop, when one was found while adding it. */
+  store?: { domain: string; platform: string; market: string } | null;
 }
 
 function errorMessage(body: unknown, fallback: string): string {
@@ -133,13 +135,19 @@ export async function addBrand(input: {
 
     revalidatePath("/brands");
 
-    const slug =
-      (body as { brand?: { slug?: string } } | null)?.brand?.slug ??
-      input.slug;
+    const brand = (body as {
+      brand?: {
+        slug?: string;
+        store?: { domain: string; platform: string; market: string } | null;
+      };
+    } | null)?.brand;
+
+    const slug = brand?.slug ?? input.slug;
 
     return {
       ok: true,
       slug,
+      store: brand?.store ?? null,
       message: `${input.englishName.toUpperCase()} is now tracked for the US and Korean stores.`,
     };
   } catch (error) {
@@ -155,12 +163,20 @@ export async function addBrand(input: {
  */
 export async function collectBrand(
   slug: string,
+  options: { isNew?: boolean } = {},
 ): Promise<BrandActionResult> {
   await requireAdmin();
 
   try {
+    /*
+     * The backend drops the brand itself when a run for a newly added
+     * one comes back empty, so the rule holds however the brand was
+     * added rather than only through this page.
+     */
     const response = await backendFetch(
-      `/api/brands/${encodeURIComponent(slug)}/collect`,
+      `/api/brands/${encodeURIComponent(slug)}/collect${
+        options.isNew ? "?dropIfEmpty=true" : ""
+      }`,
       { method: "POST" },
     );
 
@@ -175,17 +191,36 @@ export async function collectBrand(
 
     const result = body as {
       englishName?: string;
+      storeDomain?: string | null;
       collected?: Record<string, number>;
       saved?: number;
+      removed?: boolean;
     };
 
     const us = result.collected?.US ?? 0;
     const kr = result.collected?.KR ?? 0;
 
+    const name = result.englishName ?? slug;
+
     if (us + kr === 0) {
+      /*
+       * A brand only earns a place in the shop by having something on
+       * sale, so drop the one just added rather than leaving an empty
+       * filter behind. Brands already in the shop are left alone — they
+       * have simply sold through, and the nightly run will refill them.
+       */
+      if (result.removed) {
+        revalidatePath("/brands");
+
+        return {
+          ok: false,
+          message: `${name} was not added: nothing from this brand is on sale, either at its own website or at the sale sites we search. Try again when it goes on sale.`,
+        };
+      }
+
       return {
         ok: true,
-        message: `${result.englishName ?? slug} is tracked, but no sale items were on the retailers just now. The nightly refresh will keep looking.`,
+        message: `${name} is tracked, but no sale items were on the retailers just now. The nightly refresh will keep looking.`,
       };
     }
 
@@ -193,7 +228,9 @@ export async function collectBrand(
 
     return {
       ok: true,
-      message: `${result.englishName ?? slug}: ${us} US and ${kr} Korean sale items are now in the shop.`,
+      message: `${name}: ${us} US and ${kr} Korean sale items are now in the shop${
+        result.storeDomain ? `, including its own site ${result.storeDomain}` : ""
+      }.`,
     };
   } catch (error) {
     console.error("Brand collection failed:", error);

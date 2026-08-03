@@ -14,7 +14,8 @@ interface Brand {
   isActive: boolean;
   addedBy: string | null;
   createdAt: string | null;
-  productCount?: number;
+  productCount?: number | null;
+  storeDomain?: string | null;
 }
 
 async function getBrands(): Promise<{
@@ -82,6 +83,7 @@ export default async function BrandsPage() {
                 <tr>
                   <th className="px-4 py-3">Brand</th>
                   <th className="px-4 py-3">Sale items</th>
+                  <th className="px-4 py-3">Own shop</th>
                   <th className="px-4 py-3">Korean</th>
                   <th className="px-4 py-3">Also matched as</th>
                   <th className="px-4 py-3">Added by</th>
@@ -108,12 +110,39 @@ export default async function BrandsPage() {
                         <span className="font-semibold">
                           {brand.productCount}
                         </span>
-                      ) : (
+                      ) : brand.productCount === 0 ? (
                         <span
                           className="text-xs text-amber-700"
-                          title="The brand is tracked, but the retailers have nothing from it on sale right now."
+                          title="The brand is tracked, but nothing from it is on sale right now at its own website or at the sale sites we search."
                         >
                           none on sale
+                        </span>
+                      ) : (
+                        <span
+                          className="text-xs text-neutral-400"
+                          title="The count could not be read just now. This does not mean the brand has nothing on sale."
+                        >
+                          not counted
+                        </span>
+                      )}
+                    </td>
+
+                    <td className="px-4 py-4 text-xs">
+                      {brand.storeDomain ? (
+                        <a
+                          href={`https://${brand.storeDomain}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-neutral-600 underline underline-offset-2 hover:text-neutral-950"
+                        >
+                          {brand.storeDomain}
+                        </a>
+                      ) : (
+                        <span
+                          className="text-neutral-400"
+                          title="No shop of the brand's own was found, so its sale items come from the retailers only."
+                        >
+                          —
                         </span>
                       )}
                     </td>
