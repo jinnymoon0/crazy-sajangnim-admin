@@ -15,6 +15,7 @@ interface Brand {
   addedBy: string | null;
   createdAt: string | null;
   productCount?: number | null;
+  productCountByMarket?: { US: number; KR: number } | null;
   storeDomain?: string | null;
 }
 
@@ -107,9 +108,23 @@ export default async function BrandsPage() {
 
                     <td className="px-4 py-4">
                       {brand.productCount ? (
-                        <span className="font-semibold">
-                          {brand.productCount}
-                        </span>
+                        <>
+                          <span className="font-semibold">
+                            {brand.productCount}
+                          </span>
+
+                          {/*
+                            Which storefront they are in. A brand on sale
+                            only in America shows nothing on the Korean
+                            store, which the total alone does not explain.
+                          */}
+                          {brand.productCountByMarket ? (
+                            <span className="mt-0.5 block text-xs text-neutral-500">
+                              US {brand.productCountByMarket.US} · KR{" "}
+                              {brand.productCountByMarket.KR}
+                            </span>
+                          ) : null}
+                        </>
                       ) : brand.productCount === 0 ? (
                         <span
                           className="text-xs text-amber-700"
