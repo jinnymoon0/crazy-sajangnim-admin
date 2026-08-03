@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 import AdminNav from "@/components/AdminNav";
 import BrandBar from "@/components/BrandBar";
 import BrandRow from "@/components/BrandRow";
@@ -99,7 +101,12 @@ export default async function BrandsPage() {
                     className="border-b border-neutral-100 align-top last:border-b-0"
                   >
                     <td className="px-4 py-4">
-                      <p className="font-semibold">{brand.englishName}</p>
+                      <Link
+                        href={`/brands/${brand.slug}`}
+                        className="font-semibold underline decoration-neutral-300 underline-offset-4 hover:decoration-neutral-950"
+                      >
+                        {brand.englishName}
+                      </Link>
 
                       <p className="font-mono text-xs text-neutral-400">
                         {brand.slug}
