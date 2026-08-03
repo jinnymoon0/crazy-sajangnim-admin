@@ -92,8 +92,9 @@ async function getUsers(): Promise<{
 }
 
 /*
- * Posts, comments and likes are each stamped with the author's
- * username, so activity is aggregated per username.
+ * Activity is counted against the account that did it, not the username
+ * it had at the time — a rename used to split one person into two rows.
+ * Writing that predates the id column still falls back to the name.
  *
  * Read a page at a time: a response is capped at a thousand rows
  * however large a limit is asked for, so a single read would quietly
@@ -101,16 +102,21 @@ async function getUsers(): Promise<{
  */
 const ACTIVITY_PAGE_SIZE = 1000;
 
-async function readAuthors(table: string): Promise<string[]> {
+interface AuthorRow {
+  user_id: string | null;
+  author_name: string | null;
+}
+
+async function readAuthors(table: string): Promise<AuthorRow[]> {
   const supabase = getSupabaseAdmin();
-  const names: string[] = [];
+  const rows: AuthorRow[] = [];
 
   for (let page = 0; ; page += 1) {
     const from = page * ACTIVITY_PAGE_SIZE;
 
     const { data, error } = await supabase
       .from(table)
-      .select("author_name")
+      .select("user_id, author_name")
       .order("author_name")
       .range(from, from + ACTIVITY_PAGE_SIZE - 1);
 
@@ -119,40 +125,37 @@ async function readAuthors(table: string): Promise<string[]> {
         console.error(`Reading ${table} failed:`, error.message);
       }
 
-      return names;
+      return rows;
     }
 
-    const rows = (data ?? []) as { author_name: string | null }[];
+    const page_ = (data ?? []) as AuthorRow[];
 
-    for (const row of rows) {
-      if (row.author_name) {
-        names.push(row.author_name);
-      }
-    }
+    rows.push(...page_);
 
-    if (rows.length < ACTIVITY_PAGE_SIZE) {
-      return names;
+    if (page_.length < ACTIVITY_PAGE_SIZE) {
+      return rows;
     }
   }
 }
-async function getActivityByUsername(): Promise<Map<string, ActivityCounts>> {
+/*
+ * Keyed by account id where the row has one, and by "name:<username>"
+ * where it does not, so writing from before the id column still counts
+ * against somebody.
+ */
+async function getActivity(): Promise<Map<string, ActivityCounts>> {
   const activity = new Map<string, ActivityCounts>();
 
-  const bump = (
-    username: string | null,
-    key: keyof ActivityCounts,
-  ) => {
-    if (!username) {
+  const bump = (row: AuthorRow, key: keyof ActivityCounts) => {
+    const id = row.user_id ?? (row.author_name ? `name:${row.author_name}` : null);
+
+    if (!id) {
       return;
     }
 
-    const entry = activity.get(username) ?? {
-      posts: 0,
-      comments: 0,
-      likes: 0,
-    };
+    const entry = activity.get(id) ?? { posts: 0, comments: 0, likes: 0 };
+
     entry[key] += 1;
-    activity.set(username, entry);
+    activity.set(id, entry);
   };
 
   const [posts, comments, likes] = await Promise.all([
@@ -161,25 +164,45 @@ async function getActivityByUsername(): Promise<Map<string, ActivityCounts>> {
     readAuthors("blog_post_likes"),
   ]);
 
-  for (const name of posts) {
-    bump(name, "posts");
+  for (const row of posts) {
+    bump(row, "posts");
   }
 
-  for (const name of comments) {
-    bump(name, "comments");
+  for (const row of comments) {
+    bump(row, "comments");
   }
 
-  for (const name of likes) {
-    bump(name, "likes");
+  for (const row of likes) {
+    bump(row, "likes");
   }
 
   return activity;
 }
 
+/*
+ * One user's totals: what is filed under their account, plus anything
+ * still filed under their name from before the id was recorded.
+ */
+function activityFor(
+  activity: Map<string, ActivityCounts>,
+  user: { id: string; username: string | null },
+): ActivityCounts {
+  const byId = activity.get(user.id);
+  const byName = user.username
+    ? activity.get(`name:${user.username}`)
+    : undefined;
+
+  return {
+    posts: (byId?.posts ?? 0) + (byName?.posts ?? 0),
+    comments: (byId?.comments ?? 0) + (byName?.comments ?? 0),
+    likes: (byId?.likes ?? 0) + (byName?.likes ?? 0),
+  };
+}
+
 export default async function UsersPage() {
   const admin = await requireAdmin();
   const { users, tablesReady } = await getUsers();
-  const activity = await getActivityByUsername();
+  const activity = await getActivity();
 
   return (
     <div className="min-h-screen bg-neutral-50 text-neutral-900">
@@ -361,15 +384,13 @@ export default async function UsersPage() {
 
                     <td className="px-4 py-4 text-xs text-neutral-600">
                       {(() => {
-                        const counts = user.username
-                          ? activity.get(user.username)
-                          : undefined;
+                        const counts = activityFor(activity, user);
 
                         return (
                           <>
-                            <p>{counts?.posts ?? 0} posts</p>
-                            <p>{counts?.comments ?? 0} comments</p>
-                            <p>{counts?.likes ?? 0} likes</p>
+                            <p>{counts.posts} posts</p>
+                            <p>{counts.comments} comments</p>
+                            <p>{counts.likes} likes</p>
                           </>
                         );
                       })()}
