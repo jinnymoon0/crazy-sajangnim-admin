@@ -14,7 +14,7 @@ interface Brand {
   isActive: boolean;
   addedBy: string | null;
   createdAt: string | null;
-  productCount?: number;
+  productCount?: number | null;
   storeDomain?: string | null;
 }
 
@@ -110,12 +110,19 @@ export default async function BrandsPage() {
                         <span className="font-semibold">
                           {brand.productCount}
                         </span>
-                      ) : (
+                      ) : brand.productCount === 0 ? (
                         <span
                           className="text-xs text-amber-700"
-                          title="The brand is tracked, but the retailers have nothing from it on sale right now."
+                          title="The brand is tracked, but nothing from it is on sale right now at its own website or at the sale sites we search."
                         >
                           none on sale
+                        </span>
+                      ) : (
+                        <span
+                          className="text-xs text-neutral-400"
+                          title="The count could not be read just now. This does not mean the brand has nothing on sale."
+                        >
+                          not counted
                         </span>
                       )}
                     </td>
