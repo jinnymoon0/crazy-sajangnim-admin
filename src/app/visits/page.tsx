@@ -28,6 +28,16 @@ interface VisitRow {
   timezone: string | null;
   browser_language: string | null;
   connection_type: string | null;
+  cpu_cores: number | null;
+  device_memory_gb: number | null;
+  viewport_size: string | null;
+  languages: string[] | null;
+  max_touch_points: number | null;
+  do_not_track: boolean | null;
+  is_returning: boolean | null;
+  utm_source: string | null;
+  utm_medium: string | null;
+  utm_campaign: string | null;
 }
 
 function formatDateTime(value: string | null): string {
@@ -196,9 +206,18 @@ export default async function VisitsPage() {
                           </span>
                         )}
 
-                        <p className="font-mono text-[11px] text-neutral-400">
+                        <Link
+                          href={`/visits/${visit.visitor_id}`}
+                          className="block font-mono text-[11px] text-neutral-400 underline decoration-neutral-200 underline-offset-2 hover:text-neutral-700"
+                        >
                           {visit.visitor_id.slice(0, 8)}
-                        </p>
+                        </Link>
+
+                        {visit.is_returning ? (
+                          <span className="mt-1 inline-block rounded-full bg-neutral-100 px-2 py-0.5 text-[10px] font-semibold text-neutral-600">
+                            returning
+                          </span>
+                        ) : null}
                       </td>
 
                       <td className="px-4 py-4 text-xs text-neutral-600">
@@ -219,12 +238,36 @@ export default async function VisitsPage() {
                         <p className="max-w-56 truncate font-mono text-neutral-400">
                           {visit.landing_path ?? "—"}
                         </p>
+
+                        {visit.utm_source || visit.utm_campaign ? (
+                          <p className="mt-1 text-[11px] text-sky-700">
+                            {[visit.utm_source, visit.utm_medium, visit.utm_campaign]
+                              .filter(Boolean)
+                              .join(" / ")}
+                          </p>
+                        ) : null}
                       </td>
 
                       <td className="px-4 py-4 text-xs text-neutral-600">
                         <p>
                           {visit.device_platform ?? "—"}
-                          {visit.screen_size ? ` · ${visit.screen_size}` : ""}
+                          {visit.screen_size ? ` · screen ${visit.screen_size}` : ""}
+                          {visit.viewport_size ? ` · window ${visit.viewport_size}` : ""}
+                        </p>
+
+                        <p className="text-neutral-400">
+                          {[
+                            visit.cpu_cores ? `${visit.cpu_cores} cores` : null,
+                            visit.device_memory_gb
+                              ? `${visit.device_memory_gb} GB`
+                              : null,
+                            visit.max_touch_points
+                              ? `${visit.max_touch_points} touch`
+                              : "no touch",
+                            visit.do_not_track ? "do-not-track" : null,
+                          ]
+                            .filter(Boolean)
+                            .join(" · ")}
                         </p>
 
                         <p
@@ -236,7 +279,7 @@ export default async function VisitsPage() {
 
                         <p className="text-neutral-400">
                           {[
-                            visit.browser_language,
+                            visit.languages?.join(", ") ?? visit.browser_language,
                             visit.timezone,
                             visit.connection_type,
                           ]
