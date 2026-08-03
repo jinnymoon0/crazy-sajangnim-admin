@@ -52,8 +52,25 @@ async function getBreakdown(
       `/api/brands/${encodeURIComponent(slug)}/breakdown`,
     );
 
+    /*
+     * A 404 means either the brand is untracked or the product service
+     * has no breakdown endpoint yet. Only the first is really "not
+     * found"; the service says so in JSON, while a missing route answers
+     * with the service's own error page. Telling them apart keeps a
+     * service that needs deploying from looking like a missing brand.
+     */
     if (response.status === 404) {
-      return { breakdown: null, error: null };
+      const body: unknown = await response.json().catch(() => null);
+
+      const isKnownBrandError =
+        typeof body === "object" && body !== null && "error" in body;
+
+      return {
+        breakdown: null,
+        error: isKnownBrandError
+          ? null
+          : "The product service has no breakdown for this brand yet. It is running an older version — deploy the backend to see this page.",
+      };
     }
 
     if (!response.ok) {

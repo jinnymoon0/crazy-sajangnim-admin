@@ -4,7 +4,7 @@ import SignOutButton from "@/components/SignOutButton";
 
 interface AdminNavProps {
   adminEmail: string;
-  active: "users" | "admins" | "brands";
+  active: "users" | "admins" | "brands" | "messages";
 }
 
 export default function AdminNav({ adminEmail, active }: AdminNavProps) {
@@ -35,6 +35,17 @@ export default function AdminNav({ adminEmail, active }: AdminNavProps) {
               }
             >
               Brands
+            </Link>
+
+            <Link
+              href="/messages"
+              className={
+                active === "messages"
+                  ? "font-semibold text-neutral-950 underline"
+                  : "text-neutral-500 hover:text-neutral-950"
+              }
+            >
+              Messages
             </Link>
 
             <Link
