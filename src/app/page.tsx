@@ -48,6 +48,7 @@ interface SiteUserRow {
 interface ActivityCounts {
   posts: number;
   comments: number;
+  likes: number;
 }
 
 function formatDate(value: string | null): string {
@@ -91,11 +92,50 @@ async function getUsers(): Promise<{
 }
 
 /*
- * Posts and comments are stamped with the author's username, so
- * activity is aggregated per username.
+ * Posts, comments and likes are each stamped with the author's
+ * username, so activity is aggregated per username.
+ *
+ * Read a page at a time: a response is capped at a thousand rows
+ * however large a limit is asked for, so a single read would quietly
+ * stop counting once any of these passes that.
  */
-async function getActivityByUsername(): Promise<Map<string, ActivityCounts>> {
+const ACTIVITY_PAGE_SIZE = 1000;
+
+async function readAuthors(table: string): Promise<string[]> {
   const supabase = getSupabaseAdmin();
+  const names: string[] = [];
+
+  for (let page = 0; ; page += 1) {
+    const from = page * ACTIVITY_PAGE_SIZE;
+
+    const { data, error } = await supabase
+      .from(table)
+      .select("author_name")
+      .order("author_name")
+      .range(from, from + ACTIVITY_PAGE_SIZE - 1);
+
+    if (error) {
+      if (error.code !== "42P01" && error.code !== "PGRST205") {
+        console.error(`Reading ${table} failed:`, error.message);
+      }
+
+      return names;
+    }
+
+    const rows = (data ?? []) as { author_name: string | null }[];
+
+    for (const row of rows) {
+      if (row.author_name) {
+        names.push(row.author_name);
+      }
+    }
+
+    if (rows.length < ACTIVITY_PAGE_SIZE) {
+      return names;
+    }
+  }
+}
+async function getActivityByUsername(): Promise<Map<string, ActivityCounts>> {
   const activity = new Map<string, ActivityCounts>();
 
   const bump = (
@@ -106,22 +146,31 @@ async function getActivityByUsername(): Promise<Map<string, ActivityCounts>> {
       return;
     }
 
-    const entry = activity.get(username) ?? { posts: 0, comments: 0 };
+    const entry = activity.get(username) ?? {
+      posts: 0,
+      comments: 0,
+      likes: 0,
+    };
     entry[key] += 1;
     activity.set(username, entry);
   };
 
-  const [posts, comments] = await Promise.all([
-    supabase.from("blog_posts").select("author_name").limit(5000),
-    supabase.from("blog_comments").select("author_name").limit(5000),
+  const [posts, comments, likes] = await Promise.all([
+    readAuthors("blog_posts"),
+    readAuthors("blog_comments"),
+    readAuthors("blog_post_likes"),
   ]);
 
-  for (const row of posts.data ?? []) {
-    bump(row.author_name, "posts");
+  for (const name of posts) {
+    bump(name, "posts");
   }
 
-  for (const row of comments.data ?? []) {
-    bump(row.author_name, "comments");
+  for (const name of comments) {
+    bump(name, "comments");
+  }
+
+  for (const name of likes) {
+    bump(name, "likes");
   }
 
   return activity;
@@ -320,6 +369,7 @@ export default async function UsersPage() {
                           <>
                             <p>{counts?.posts ?? 0} posts</p>
                             <p>{counts?.comments ?? 0} comments</p>
+                            <p>{counts?.likes ?? 0} likes</p>
                           </>
                         );
                       })()}
