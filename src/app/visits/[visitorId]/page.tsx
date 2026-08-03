@@ -40,6 +40,12 @@ interface VisitRow {
   utm_content: string | null;
 }
 
+interface PersonRow {
+  username: string | null;
+  full_name: string | null;
+  email: string | null;
+}
+
 interface PageViewRow {
   id: string;
   path: string;
@@ -131,17 +137,23 @@ export default async function VisitorPage({
 
   const accountId = visits.find((visit) => visit.user_id)?.user_id ?? null;
 
-  let username: string | null = null;
+  let person: PersonRow | null = null;
 
   if (accountId) {
     const { data } = await supabase
       .from("site_users")
-      .select("username")
+      .select("username, full_name, email")
       .eq("id", accountId)
       .maybeSingle();
 
-    username = (data as { username: string | null } | null)?.username ?? null;
+    person = (data as PersonRow | null) ?? null;
   }
+
+  /*
+   * Visits made before they signed in carry no account of their own,
+   * but the cookie was the same, so they were the same person.
+   */
+  const anonymousBefore = visits.filter((visit) => !visit.user_id).length;
 
   const totalViews = visits.reduce(
     (sum, visit) => sum + (visit.page_views ?? 0),
@@ -166,19 +178,25 @@ export default async function VisitorPage({
           </h1>
 
           <p className="mt-1 text-sm text-neutral-500">
-            {accountId ? (
+            {accountId && person ? (
               <>
-                Signed in as{" "}
                 <Link
                   href={`/users/${accountId}`}
                   className="font-semibold underline underline-offset-2"
                 >
-                  {username ?? "(no username)"}
+                  {person.full_name ?? person.username ?? "(no name set)"}
                 </Link>
+                {person.username && person.full_name
+                  ? ` (${person.username})`
+                  : ""}
+                {person.email ? ` · ${person.email}` : ""}
+                {anonymousBefore > 0
+                  ? ` · ${anonymousBefore} ${anonymousBefore === 1 ? "day" : "days"} before signing in`
+                  : ""}
                 {" · "}
               </>
             ) : (
-              "Never signed in · "
+              "No name — this browser has never signed in · "
             )}
             {visits.length} {visits.length === 1 ? "day" : "days"} ·{" "}
             {totalViews} page views

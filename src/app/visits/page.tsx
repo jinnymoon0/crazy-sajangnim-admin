@@ -53,9 +53,18 @@ function formatDateTime(value: string | null): string {
   }).format(new Date(value));
 }
 
+interface Person {
+  username: string | null;
+  fullName: string | null;
+  email: string | null;
+}
+
 async function getVisits(): Promise<{
   visits: VisitRow[];
-  names: Map<string, string>;
+  people: Map<string, Person>;
+  /* Account per browser, so sessions from before they signed in are
+     named too — the cookie is the same one they carried anonymously. */
+  accountByVisitor: Map<string, string>;
   tableReady: boolean;
 }> {
   const supabase = getSupabaseAdmin();
@@ -78,7 +87,12 @@ async function getVisits(): Promise<{
         console.error("Visit list failed:", error.message);
       }
 
-      return { visits: [], names: new Map(), tableReady: false };
+      return {
+        visits: [],
+        people: new Map(),
+        accountByVisitor: new Map(),
+        tableReady: false,
+      };
     }
 
     const rows = (data ?? []) as VisitRow[];
@@ -99,32 +113,50 @@ async function getVisits(): Promise<{
     ),
   );
 
-  const names = new Map<string, string>();
+  const people = new Map<string, Person>();
 
   if (userIds.length > 0) {
     const { data } = await supabase
       .from("site_users")
-      .select("id, username")
+      .select("id, username, full_name, email")
       .in("id", userIds);
 
     for (const row of (data ?? []) as {
       id: string;
       username: string | null;
+      full_name: string | null;
+      email: string | null;
     }[]) {
-      if (row.username) {
-        names.set(row.id, row.username);
-      }
+      people.set(row.id, {
+        username: row.username,
+        fullName: row.full_name,
+        email: row.email,
+      });
     }
   }
 
-  return { visits, names, tableReady: true };
+  /*
+   * A browser that ever signs in names every visit it made, including
+   * the ones from before — same cookie, same person.
+   */
+  const accountByVisitor = new Map<string, string>();
+
+  for (const visit of visits) {
+    if (visit.user_id && !accountByVisitor.has(visit.visitor_id)) {
+      accountByVisitor.set(visit.visitor_id, visit.user_id);
+    }
+  }
+
+  return { visits, people, accountByVisitor, tableReady: true };
 }
 
 export default async function VisitsPage() {
   const admin = await requireAdmin();
-  const { visits, names, tableReady } = await getVisits();
+  const { visits, people, accountByVisitor, tableReady } = await getVisits();
 
-  const signedIn = visits.filter((visit) => visit.user_id).length;
+  const named = visits.filter((visit) =>
+    accountByVisitor.has(visit.visitor_id),
+  ).length;
   const browsers = new Set(visits.map((visit) => visit.visitor_id)).size;
   const views = visits.reduce((sum, visit) => sum + (visit.page_views ?? 0), 0);
 
@@ -158,7 +190,7 @@ export default async function VisitsPage() {
                 ["Visits", visits.length],
                 ["Browsers", browsers],
                 ["Page views", views],
-                ["Signed in", signedIn],
+                ["Named", named],
               ].map(([label, value]) => (
                 <div
                   key={String(label)}
@@ -193,18 +225,59 @@ export default async function VisitsPage() {
                       className="border-b border-neutral-100 align-top last:border-b-0"
                     >
                       <td className="px-4 py-4">
-                        {visit.user_id ? (
-                          <Link
-                            href={`/users/${visit.user_id}`}
-                            className="font-semibold underline decoration-neutral-300 underline-offset-2 hover:decoration-neutral-950"
-                          >
-                            {names.get(visit.user_id) ?? "(no username)"}
-                          </Link>
-                        ) : (
-                          <span className="text-neutral-500">
-                            not signed in
-                          </span>
-                        )}
+                        {(() => {
+                          const accountId = accountByVisitor.get(
+                            visit.visitor_id,
+                          );
+
+                          const person = accountId
+                            ? people.get(accountId)
+                            : undefined;
+
+                          if (!accountId || !person) {
+                            /*
+                             * Nothing in an anonymous request says who is
+                             * holding the phone. Say so, rather than
+                             * dressing up an address as a person.
+                             */
+                            return (
+                              <span className="text-neutral-500">
+                                no name — never signed in
+                              </span>
+                            );
+                          }
+
+                          return (
+                            <>
+                              <Link
+                                href={`/users/${accountId}`}
+                                className="font-semibold underline decoration-neutral-300 underline-offset-2 hover:decoration-neutral-950"
+                              >
+                                {person.fullName ??
+                                  person.username ??
+                                  "(no name set)"}
+                              </Link>
+
+                              {person.fullName && person.username ? (
+                                <p className="text-[11px] text-neutral-500">
+                                  {person.username}
+                                </p>
+                              ) : null}
+
+                              {person.email ? (
+                                <p className="break-all text-[11px] text-neutral-400">
+                                  {person.email}
+                                </p>
+                              ) : null}
+
+                              {!visit.user_id ? (
+                                <p className="text-[11px] text-amber-700">
+                                  signed in later
+                                </p>
+                              ) : null}
+                            </>
+                          );
+                        })()}
 
                         <Link
                           href={`/visits/${visit.visitor_id}`}
