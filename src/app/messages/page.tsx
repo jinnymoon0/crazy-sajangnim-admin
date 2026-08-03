@@ -14,6 +14,7 @@ interface MessageRow {
   message: string;
   ip_address: string | null;
   user_agent: string | null;
+  image_paths: string[] | null;
   is_read: boolean;
   created_at: string;
 }
@@ -56,6 +57,7 @@ function formatDate(value: string | null): string {
 async function getMessages(): Promise<{
   messages: MessageRow[];
   senders: Map<string, SenderRow>;
+  photoUrls: Map<string, string[]>;
   tableReady: boolean;
 }> {
   const supabase = getSupabaseAdmin();
@@ -74,7 +76,12 @@ async function getMessages(): Promise<{
       });
     }
 
-    return { messages: [], senders: new Map(), tableReady: false };
+    return {
+      messages: [],
+      senders: new Map(),
+      photoUrls: new Map(),
+      tableReady: false,
+    };
   }
 
   const messages = (data ?? []) as MessageRow[];
@@ -108,12 +115,45 @@ async function getMessages(): Promise<{
     }
   }
 
-  return { messages, senders, tableReady: true };
+  /*
+   * The bucket is private, so each photo is shown through a link that
+   * expires. A screenshot of someone's own screen can carry their email
+   * or orders, and a permanent address would outlive any need for it.
+   */
+  const photoUrls = new Map<string, string[]>();
+
+  const withPhotos = messages.filter(
+    (message) => (message.image_paths ?? []).length > 0,
+  );
+
+  await Promise.all(
+    withPhotos.map(async (message) => {
+      const { data, error } = await supabase.storage
+        .from("contact-images")
+        .createSignedUrls(message.image_paths ?? [], 60 * 60);
+
+      if (error) {
+        console.error("Contact photo links failed:", error.message);
+
+        return;
+      }
+
+      const urls = (data ?? [])
+        .map((entry) => entry.signedUrl)
+        .filter((url): url is string => Boolean(url));
+
+      if (urls.length > 0) {
+        photoUrls.set(message.id, urls);
+      }
+    }),
+  );
+
+  return { messages, senders, photoUrls, tableReady: true };
 }
 
 export default async function MessagesPage() {
   const admin = await requireAdmin();
-  const { messages, senders, tableReady } = await getMessages();
+  const { messages, senders, photoUrls, tableReady } = await getMessages();
 
   const unread = messages.filter((message) => !message.is_read).length;
 
@@ -189,6 +229,28 @@ export default async function MessagesPage() {
                   <p className="mt-4 whitespace-pre-wrap text-sm leading-6">
                     {message.message}
                   </p>
+
+                  {(photoUrls.get(message.id) ?? []).length > 0 ? (
+                    <ul className="mt-4 flex flex-wrap gap-3">
+                      {(photoUrls.get(message.id) ?? []).map((url, index) => (
+                        <li key={url}>
+                          <a href={url} target="_blank" rel="noreferrer">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                              src={url}
+                              alt={`Attachment ${index + 1}`}
+                              className="size-28 rounded-xl border border-neutral-200 object-cover transition hover:opacity-80"
+                            />
+                          </a>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (message.image_paths ?? []).length > 0 ? (
+                    <p className="mt-4 text-xs text-neutral-400">
+                      {message.image_paths?.length} photo(s) attached, but the
+                      links could not be created.
+                    </p>
+                  ) : null}
 
                   <dl className="mt-5 grid gap-x-6 gap-y-2 border-t border-neutral-100 pt-4 text-xs sm:grid-cols-2">
                     <div className="flex gap-2">
