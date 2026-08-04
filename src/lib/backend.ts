@@ -32,6 +32,11 @@ export async function backendFetch(
     ...init,
     headers,
     cache: "no-store",
-    signal: AbortSignal.timeout(60_000),
+    /*
+     * Adding a brand searches for its own shop and for the shops that
+     * stock it, and collecting crawls every source. A minute is not
+     * enough for either; cutting them off leaves the brand half-set-up.
+     */
+    signal: AbortSignal.timeout(240_000),
   });
 }
