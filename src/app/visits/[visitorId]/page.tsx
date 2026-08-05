@@ -4,6 +4,10 @@ import { notFound } from "next/navigation";
 import AdminNav from "@/components/AdminNav";
 import { requireAdmin } from "@/lib/require-admin";
 import { getSupabaseAdmin } from "@/lib/supabase";
+import {
+  describeLanguage,
+  parseUserAgent,
+} from "@/lib/user-agent";
 
 export const dynamic = "force-dynamic";
 
@@ -135,6 +139,12 @@ export default async function VisitorPage({
 
   const latest = visits[0];
 
+  /*
+   * The browser, OS and device the string describes, so the row reads
+   * as something rather than as 200 characters of Mozilla/5.0.
+   */
+  const agent = parseUserAgent(latest.user_agent);
+
   const accountId = visits.find((visit) => visit.user_id)?.user_id ?? null;
 
   let person: PersonRow | null = null;
@@ -223,13 +233,40 @@ export default async function VisitorPage({
             />
             <Field label="Referrer" value={latest.referrer ?? "direct"} />
             <Field label="Landed on" value={latest.landing_path} />
+            <Field
+              label="Browser"
+              value={
+                [agent.browser, agent.browserVersion].filter(Boolean).join(" ") ||
+                null
+              }
+            />
+            <Field
+              label="Operating system"
+              value={
+                [agent.os, agent.osVersion].filter(Boolean).join(" ") || null
+              }
+            />
+            <Field label="Device" value={agent.deviceType} />
             <Field label="Platform" value={latest.device_platform} />
             <Field label="Screen" value={latest.screen_size} />
             <Field label="Window" value={latest.viewport_size} />
             <Field label="Timezone" value={latest.timezone} />
             <Field
-              label="Languages"
-              value={latest.languages?.join(", ") ?? latest.browser_language}
+              label="Browser language"
+              value={
+                describeLanguage(latest.browser_language) ??
+                latest.browser_language
+              }
+            />
+            <Field
+              label="All languages"
+              value={
+                latest.languages?.length
+                  ? latest.languages
+                      .map((tag) => describeLanguage(tag) ?? tag)
+                      .join(", ")
+                  : null
+              }
             />
             <Field label="CPU cores" value={latest.cpu_cores} />
             <Field label="Memory" value={latest.device_memory_gb ? `${latest.device_memory_gb} GB` : null} />

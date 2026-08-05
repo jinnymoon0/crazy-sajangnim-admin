@@ -3,6 +3,10 @@ import Link from "next/link";
 import AdminNav from "@/components/AdminNav";
 import { requireAdmin } from "@/lib/require-admin";
 import { getSupabaseAdmin } from "@/lib/supabase";
+import {
+  describeLanguage,
+  describeUserAgent,
+} from "@/lib/user-agent";
 
 export const dynamic = "force-dynamic";
 
@@ -347,6 +351,15 @@ export default async function VisitsPage() {
                       </td>
 
                       <td className="px-4 py-4 text-xs text-neutral-600">
+                        {/*
+                          The browser first and in plain words. The raw
+                          string is kept below it, since it is the only
+                          place the untidy details survive.
+                        */}
+                        <p className="font-semibold text-neutral-700">
+                          {describeUserAgent(visit.user_agent) ?? "unknown browser"}
+                        </p>
+
                         <p>
                           {visit.device_platform ?? "—"}
                           {visit.screen_size ? ` · screen ${visit.screen_size}` : ""}
@@ -377,7 +390,8 @@ export default async function VisitsPage() {
 
                         <p className="text-neutral-400">
                           {[
-                            visit.languages?.join(", ") ?? visit.browser_language,
+                            describeLanguage(visit.browser_language) ??
+                              visit.languages?.join(", "),
                             visit.timezone,
                             visit.connection_type,
                           ]
