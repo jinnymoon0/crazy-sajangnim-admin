@@ -62,6 +62,52 @@ interface CommentRow {
   created_at: string;
 }
 
+interface LikeRow {
+  id: string;
+  post_id: string;
+  created_at: string;
+}
+
+interface VisitRow {
+  id: string;
+  visit_date: string;
+  first_seen_at: string;
+  last_seen_at: string;
+  page_views: number;
+  ip_address: string | null;
+  ip_country: string | null;
+  ip_city: string | null;
+  ip_region: string | null;
+  device_platform: string | null;
+  screen_size: string | null;
+  user_agent: string | null;
+  referrer: string | null;
+}
+
+/*
+ * How long they stayed. The shop pings while a page is open and once
+ * more on the way out, so this is time present rather than the gap
+ * between the first and last page they opened.
+ */
+function stayLength(from: string, to: string): string {
+  const ms = new Date(to).getTime() - new Date(from).getTime();
+
+  if (!Number.isFinite(ms) || ms < 0) {
+    return "—";
+  }
+
+  const minutes = Math.floor(ms / 60000);
+  const seconds = Math.round((ms % 60000) / 1000);
+
+  if (minutes === 0) {
+    return `${seconds}s`;
+  }
+
+  return minutes < 60
+    ? `${minutes}m ${seconds}s`
+    : `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
+}
+
 function formatDate(value: string | null): string {
   if (!value) {
     return "—";
@@ -141,32 +187,53 @@ export default async function UserDetailPage({
   const user = data as SiteUserRow;
 
   /*
-   * Posts and comments are stamped with the author's username, so a
-   * user who never chose one has no activity to show.
+   * Matched on the account, with the username as a fallback for writing
+   * from before the id was recorded. Matching on the name alone lost
+   * everything a person wrote before they renamed themselves.
    */
-  const [postsResult, commentsResult] = user.username
-    ? await Promise.all([
-        supabase
-          .from("blog_posts")
-          .select("id, title, content, image_urls, created_at")
-          .eq("author_name", user.username)
-          .order("created_at", { ascending: false })
-          .limit(200),
-        supabase
-          .from("blog_comments")
-          .select("id, post_id, content, created_at")
-          .eq("author_name", user.username)
-          .order("created_at", { ascending: false })
-          .limit(200),
-      ])
-    : [{ data: [] }, { data: [] }];
+  const byAccount = `user_id.eq.${user.id}${
+    user.username ? `,author_name.eq.${user.username}` : ""
+  }`;
+
+  const [postsResult, commentsResult, likesResult, visitsResult] =
+    await Promise.all([
+      supabase
+        .from("blog_posts")
+        .select("id, title, content, image_urls, created_at")
+        .or(byAccount)
+        .order("created_at", { ascending: false })
+        .limit(200),
+      supabase
+        .from("blog_comments")
+        .select("id, post_id, content, created_at")
+        .or(byAccount)
+        .order("created_at", { ascending: false })
+        .limit(200),
+      supabase
+        .from("blog_post_likes")
+        .select("id, post_id, created_at")
+        .or(byAccount)
+        .order("created_at", { ascending: false })
+        .limit(200),
+      supabase
+        .from("site_visits")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("visit_date", { ascending: false })
+        .limit(100),
+    ]);
 
   const posts = (postsResult.data ?? []) as PostRow[];
   const comments = (commentsResult.data ?? []) as CommentRow[];
+  const likes = (likesResult.data ?? []) as LikeRow[];
+  const visits = (visitsResult.data ?? []) as VisitRow[];
 
-  // Resolve the titles of the posts this user commented on.
+  // Titles for whatever they commented on or liked.
   const commentedPostIds = Array.from(
-    new Set(comments.map((comment) => comment.post_id)),
+    new Set([
+      ...comments.map((comment) => comment.post_id),
+      ...likes.map((like) => like.post_id),
+    ]),
   );
 
   const postTitles = new Map<string, string>();
@@ -370,6 +437,122 @@ export default async function UserDetailPage({
             </ul>
           ) : (
             <p className="mt-3 text-sm text-neutral-500">No comments.</p>
+          )}
+        </section>
+
+        <section className="mt-10">
+          <h2 className="text-lg font-bold">
+            Likes{" "}
+            <span className="text-sm font-normal text-neutral-500">
+              ({likes.length})
+            </span>
+          </h2>
+
+          {likes.length > 0 ? (
+            <ul className="mt-3 space-y-2">
+              {likes.map((like) => (
+                <li
+                  key={like.id}
+                  className="flex flex-wrap items-baseline justify-between gap-3 rounded-2xl border border-neutral-200 bg-white px-5 py-3"
+                >
+                  <span className="text-sm font-semibold">
+                    {postTitles.get(like.post_id) ?? "(post deleted)"}
+                  </span>
+
+                  <span className="text-xs text-neutral-500">
+                    {formatDate(like.created_at)}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="mt-3 text-sm text-neutral-500">
+              Nothing liked yet.
+            </p>
+          )}
+        </section>
+
+        <section className="mt-10">
+          <h2 className="text-lg font-bold">
+            Visits{" "}
+            <span className="text-sm font-normal text-neutral-500">
+              ({visits.length})
+            </span>
+          </h2>
+
+          <p className="mt-1 text-sm text-neutral-500">
+            Each day this account was seen on the shop, and for how long.
+          </p>
+
+          {visits.length > 0 ? (
+            <div className="mt-3 overflow-x-auto rounded-2xl border border-neutral-200 bg-white">
+              <table className="w-full min-w-[46rem] text-left text-sm">
+                <thead className="border-b border-neutral-200 text-xs uppercase tracking-wide text-neutral-500">
+                  <tr>
+                    <th className="px-4 py-3">Date</th>
+                    <th className="px-4 py-3">Stayed</th>
+                    <th className="px-4 py-3">Views</th>
+                    <th className="px-4 py-3">Where from</th>
+                    <th className="px-4 py-3">Device</th>
+                  </tr>
+                </thead>
+
+                <tbody>
+                  {visits.map((visit) => (
+                    <tr
+                      key={visit.id}
+                      className="border-b border-neutral-100 align-top last:border-b-0"
+                    >
+                      <td className="px-4 py-3">
+                        {visit.visit_date}
+
+                        <p className="text-xs text-neutral-400">
+                          from {formatDate(visit.first_seen_at)}
+                        </p>
+                      </td>
+
+                      <td className="px-4 py-3 font-semibold">
+                        {stayLength(visit.first_seen_at, visit.last_seen_at)}
+                      </td>
+
+                      <td className="px-4 py-3">{visit.page_views}</td>
+
+                      <td className="px-4 py-3 text-xs text-neutral-600">
+                        <p className="font-mono">{visit.ip_address ?? "—"}</p>
+
+                        <p>
+                          {[visit.ip_city, visit.ip_region, visit.ip_country]
+                            .filter(Boolean)
+                            .join(", ") || "—"}
+                        </p>
+
+                        <p className="max-w-48 truncate text-neutral-400">
+                          {visit.referrer ?? "direct"}
+                        </p>
+                      </td>
+
+                      <td className="px-4 py-3 text-xs text-neutral-600">
+                        <p>
+                          {visit.device_platform ?? "—"}
+                          {visit.screen_size ? ` · ${visit.screen_size}` : ""}
+                        </p>
+
+                        <p
+                          className="max-w-56 truncate text-neutral-400"
+                          title={visit.user_agent ?? ""}
+                        >
+                          {visit.user_agent ?? "—"}
+                        </p>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <p className="mt-3 text-sm text-neutral-500">
+              No visits recorded for this account yet.
+            </p>
           )}
         </section>
       </main>

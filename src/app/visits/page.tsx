@@ -40,6 +40,30 @@ interface VisitRow {
   utm_campaign: string | null;
 }
 
+/*
+ * Time present, not the gap between first and last page. The shop pings
+ * while a page is open and once more on the way out, so someone who
+ * reads one page for ten minutes no longer reads as a bounce.
+ */
+function stayLength(from: string, to: string): string {
+  const ms = new Date(to).getTime() - new Date(from).getTime();
+
+  if (!Number.isFinite(ms) || ms < 0) {
+    return "—";
+  }
+
+  const minutes = Math.floor(ms / 60000);
+  const seconds = Math.round((ms % 60000) / 1000);
+
+  if (minutes === 0) {
+    return `${seconds}s`;
+  }
+
+  return minutes < 60
+    ? `${minutes}m ${seconds}s`
+    : `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
+}
+
 function formatDateTime(value: string | null): string {
   if (!value) {
     return "—";
@@ -214,6 +238,7 @@ export default async function VisitsPage() {
                     <th className="px-4 py-3">Came via</th>
                     <th className="px-4 py-3">Device</th>
                     <th className="px-4 py-3">Views</th>
+                    <th className="px-4 py-3">Stayed</th>
                     <th className="px-4 py-3">Last seen</th>
                   </tr>
                 </thead>
@@ -363,6 +388,10 @@ export default async function VisitsPage() {
 
                       <td className="px-4 py-4 text-center font-semibold">
                         {visit.page_views}
+                      </td>
+
+                      <td className="px-4 py-4 text-xs font-semibold text-neutral-700">
+                        {stayLength(visit.first_seen_at, visit.last_seen_at)}
                       </td>
 
                       <td className="px-4 py-4 text-xs text-neutral-600">
