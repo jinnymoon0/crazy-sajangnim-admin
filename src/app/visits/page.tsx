@@ -7,6 +7,7 @@ import {
   describeLanguage,
   describeUserAgent,
 } from "@/lib/user-agent";
+import { describeNetwork, identifyNetworks } from "@/lib/network";
 
 export const dynamic = "force-dynamic";
 
@@ -182,11 +183,25 @@ export default async function VisitsPage() {
   const admin = await requireAdmin();
   const { visits, people, accountByVisitor, tableReady } = await getVisits();
 
+  /*
+   * The network each address belongs to. A browser never says whose
+   * machine it is, so this is as close as an anonymous visit gets — and
+   * it mostly answers a different question: how much of the traffic is
+   * a person at all.
+   */
+  const networks = await identifyNetworks(
+    visits.map((visit) => visit.ip_address),
+  );
+
   const named = visits.filter((visit) =>
     accountByVisitor.has(visit.visitor_id),
   ).length;
   const browsers = new Set(visits.map((visit) => visit.visitor_id)).size;
   const views = visits.reduce((sum, visit) => sum + (visit.page_views ?? 0), 0);
+
+  const machines = visits.filter(
+    (visit) => networks.get(visit.ip_address ?? "")?.isMachine,
+  ).length;
 
   return (
     <div className="min-h-screen bg-neutral-50 text-neutral-900">
@@ -213,12 +228,13 @@ export default async function VisitsPage() {
           </p>
         ) : (
           <>
-            <div className="mt-6 grid gap-4 sm:grid-cols-4">
+            <div className="mt-6 grid gap-4 sm:grid-cols-5">
               {[
                 ["Visits", visits.length],
                 ["Browsers", browsers],
                 ["Page views", views],
                 ["Named", named],
+                ["Bots / servers", machines],
               ].map(([label, value]) => (
                 <div
                   key={String(label)}
@@ -324,6 +340,29 @@ export default async function VisitsPage() {
 
                       <td className="px-4 py-4 text-xs text-neutral-600">
                         <p className="font-mono">{visit.ip_address ?? "—"}</p>
+
+                        {/*
+                          Who the address belongs to. For someone at
+                          home this is their provider, which names a
+                          company and never a person; for a rented
+                          server it says so outright.
+                        */}
+                        <p
+                          className={
+                            networks.get(visit.ip_address ?? "")?.isMachine
+                              ? "text-amber-700"
+                              : "text-neutral-400"
+                          }
+                        >
+                          {describeNetwork(
+                            networks.get(visit.ip_address ?? "") ?? {
+                              hostname: null,
+                              organisation: null,
+                              kind: "unknown",
+                              isMachine: false,
+                            },
+                          )}
+                        </p>
 
                         <p className="text-neutral-500">
                           {[visit.ip_city, visit.ip_region, visit.ip_country]
