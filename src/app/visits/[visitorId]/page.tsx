@@ -8,6 +8,7 @@ import {
   describeLanguage,
   parseUserAgent,
 } from "@/lib/user-agent";
+import { identifyNetwork } from "@/lib/network";
 
 export const dynamic = "force-dynamic";
 
@@ -145,6 +146,14 @@ export default async function VisitorPage({
    */
   const agent = parseUserAgent(latest.user_agent);
 
+  /*
+   * The network the address belongs to. This is the closest thing to
+   * an identity an anonymous visit has, and it is worth being clear
+   * about what it is: for someone at home it names their internet
+   * provider, not them.
+   */
+  const network = await identifyNetwork(latest.ip_address);
+
   const accountId = visits.find((visit) => visit.user_id)?.user_id ?? null;
 
   let person: PersonRow | null = null;
@@ -213,6 +222,22 @@ export default async function VisitorPage({
           </p>
         </header>
 
+        {/*
+          Said plainly, because an empty name here looks like a gap in
+          the tracking rather than the way the web works.
+        */}
+        {!accountId ? (
+          <p className="mt-4 rounded-2xl border border-neutral-200 bg-white p-4 text-xs leading-5 text-neutral-500">
+            A browser never tells a website whose device it is, or what
+            the device is called — there is no way to ask, by design. For
+            someone who has not signed in, everything below is what their
+            browser volunteered plus what their address says about their
+            network, which names an internet provider rather than a
+            person. If they ever sign in, these visits are joined to that
+            account and the name appears here.
+          </p>
+        ) : null}
+
         <section className="mt-6 rounded-2xl border border-neutral-200 bg-white p-5">
           <h2 className="text-sm font-bold">Most recent visit</h2>
 
@@ -223,6 +248,21 @@ export default async function VisitorPage({
               value={minutesBetween(latest.first_seen_at, latest.last_seen_at)}
             />
             <Field label="IP" value={latest.ip_address} />
+            <Field label="Network" value={network.organisation} />
+            <Field label="Reverse DNS" value={network.hostname} />
+            <Field
+              label="Connection"
+              value={
+                {
+                  datacenter: "rented server — not a person browsing",
+                  crawler: "crawler — not a person browsing",
+                  mobile: "mobile network",
+                  residential: "home broadband",
+                  business: "business or unclassified network",
+                  unknown: "no reverse record",
+                }[network.kind]
+              }
+            />
             <Field
               label="Location"
               value={
