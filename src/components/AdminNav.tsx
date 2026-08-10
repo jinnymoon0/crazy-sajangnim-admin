@@ -4,7 +4,7 @@ import SignOutButton from "@/components/SignOutButton";
 
 interface AdminNavProps {
   adminEmail: string;
-  active: "users" | "admins" | "brands" | "messages" | "visits" | "analytics";
+  active: "users" | "admins" | "brands" | "messages" | "visits" | "analytics" | "replays";
 }
 
 export default function AdminNav({ adminEmail, active }: AdminNavProps) {
@@ -57,6 +57,17 @@ export default function AdminNav({ adminEmail, active }: AdminNavProps) {
               }
             >
               Analytics
+            </Link>
+
+            <Link
+              href="/replays"
+              className={
+                active === "replays"
+                  ? "font-semibold text-neutral-950 underline"
+                  : "text-neutral-500 hover:text-neutral-950"
+              }
+            >
+              Session Replay
             </Link>
 
             <Link
