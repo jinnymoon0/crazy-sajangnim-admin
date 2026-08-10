@@ -2,6 +2,8 @@ import AdminNav from "@/components/AdminNav";
 import { requireAdmin } from "@/lib/require-admin";
 import { getSupabaseAdmin } from "@/lib/supabase";
 
+import PostHogPanels from "./PostHogPanels";
+
 export const dynamic = "force-dynamic";
 
 /*
@@ -323,6 +325,17 @@ export default async function AnalyticsPage() {
           )}
           empty="No searches recorded yet."
         />
+
+        {/*
+          PostHog's side of the same question. The Supabase panels above
+          are what the site recorded about itself; these are what the
+          browser recorded about the person.
+        */}
+        <section className="mt-12 border-t border-neutral-200 pt-8">
+          <h2 className="text-lg font-bold">From PostHog</h2>
+
+          <PostHogPanels />
+        </section>
 
         <Table
           title="What failed"
