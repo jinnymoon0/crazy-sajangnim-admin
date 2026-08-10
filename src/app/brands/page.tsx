@@ -8,6 +8,15 @@ import { requireAdmin } from "@/lib/require-admin";
 
 export const dynamic = "force-dynamic";
 
+/*
+ * A collection run walks every retailer for the brand and takes two to
+ * three minutes. Server actions inherit this page's limit, and without
+ * it they fall back to the platform default of a minute — so adding a
+ * brand reported a failure while the backend was still working and
+ * about to succeed. Matches the backend route's own ceiling.
+ */
+export const maxDuration = 300;
+
 interface Brand {
   slug: string;
   englishName: string;

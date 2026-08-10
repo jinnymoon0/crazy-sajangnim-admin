@@ -235,6 +235,24 @@ export async function collectBrand(
   } catch (error) {
     console.error("Brand collection failed:", error);
 
+    /*
+     * Running out of time here does not stop the backend, which has a
+     * longer budget and carries on. Reporting that as a failure sent
+     * people back to add a brand that was already being collected.
+     */
+    const timedOut =
+      error instanceof DOMException && error.name === "TimeoutError";
+
+    if (timedOut) {
+      revalidatePath("/brands");
+
+      return {
+        ok: true,
+        message:
+          "The brand was added and its collection run is still going. It takes a few minutes; refresh this page to see what it found.",
+      };
+    }
+
     return {
       ok: false,
       message:
