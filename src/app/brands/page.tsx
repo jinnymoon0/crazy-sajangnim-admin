@@ -26,7 +26,7 @@ interface Brand {
   addedBy: string | null;
   createdAt: string | null;
   productCount?: number | null;
-  productCountByMarket?: { US: number; KR: number } | null;
+  productCountByMarket?: { US: number; KR: number; JP: number } | null;
   storeDomain?: string | null;
 }
 
@@ -137,7 +137,8 @@ export default async function BrandsPage() {
                           {brand.productCountByMarket ? (
                             <span className="mt-0.5 block text-xs text-neutral-500">
                               US {brand.productCountByMarket.US} · KR{" "}
-                              {brand.productCountByMarket.KR}
+                              {brand.productCountByMarket.KR} · JP{" "}
+                              {brand.productCountByMarket.JP ?? 0}
                             </span>
                           ) : null}
                         </>
