@@ -7,7 +7,7 @@ import { requireAdmin } from "@/lib/require-admin";
 
 export const dynamic = "force-dynamic";
 
-type Market = "US" | "KR";
+type Market = "US" | "KR" | "JP";
 
 interface Segment {
   market: Market;
@@ -31,10 +31,18 @@ interface Breakdown {
   sources: Record<Market, SourceCount[]>;
 }
 
+/*
+ * Order the page reads in. Derived from the labels below, so a
+ * storefront cannot be given a name here and still be left off the
+ * page — which is how Japan went missing in the first place.
+ */
 const MARKET_LABELS: Record<Market, string> = {
   US: "United States",
   KR: "Korea",
+  JP: "Japan",
 };
+
+const MARKETS = Object.keys(MARKET_LABELS) as Market[];
 
 async function getBreakdown(
   slug: string,
@@ -240,45 +248,47 @@ export default async function BrandDetailPage({
 
             <h2 className="mt-8 text-sm font-bold">By section of the shop</h2>
 
-            <div className="mt-3 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              <SegmentCard
-                label="US · Men"
-                count={segmentCount("US", "MEN")}
-              />
-              <SegmentCard
-                label="US · Women"
-                count={segmentCount("US", "WOMEN")}
-              />
-              <SegmentCard
-                label="Korea · Men"
-                count={segmentCount("KR", "MEN")}
-              />
-              <SegmentCard
-                label="Korea · Women"
-                count={segmentCount("KR", "WOMEN")}
-              />
+            {/*
+              Built from the market list rather than written out. Spelled
+              out, this page kept reporting on two storefronts after the
+              service grew a third — a brand could be selling in Japan
+              and the page that exists to say so would not mention it.
+            */}
+            <div className="mt-3 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {MARKETS.flatMap((market) =>
+                (["MEN", "WOMEN"] as const).map((gender) => (
+                  <SegmentCard
+                    key={`${market}-${gender}`}
+                    label={`${MARKET_LABELS[market]} · ${
+                      gender === "MEN" ? "Men" : "Women"
+                    }`}
+                    count={segmentCount(market, gender)}
+                  />
+                )),
+              )}
             </div>
 
             <p className="mt-3 text-xs text-neutral-500">
               Unisex items show in both the men&rsquo;s and women&rsquo;s
-              sections, so these four can add up to more than{" "}
-              {breakdown.total}.
+              sections, so these can add up to more than {breakdown.total}.
             </p>
 
             <h2 className="mt-10 text-sm font-bold">By site</h2>
 
-            <div className="mt-3 grid gap-4 lg:grid-cols-2">
-              <SourceTable
-                market="US"
-                sources={breakdown.sources.US}
-                total={breakdown.totalByMarket.US}
-              />
-
-              <SourceTable
-                market="KR"
-                sources={breakdown.sources.KR}
-                total={breakdown.totalByMarket.KR}
-              />
+            <div className="mt-3 grid gap-4 lg:grid-cols-3">
+              {MARKETS.map((market) => (
+                <SourceTable
+                  key={market}
+                  market={market}
+                  /*
+                   * Defaulted, because a brand with nothing in a
+                   * storefront yet has no entry at all — and an empty
+                   * table saying zero is the answer, not a crash.
+                   */
+                  sources={breakdown.sources[market] ?? []}
+                  total={breakdown.totalByMarket[market] ?? 0}
+                />
+              ))}
             </div>
           </>
         ) : null}
